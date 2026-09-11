@@ -1,0 +1,53 @@
+# ffigen config for the raw transcribe.cpp C surface.
+#
+# Header choice follows transcribe.cpp's own docs/bindings.md: use
+# include/transcribe/extensions.h, which pulls in transcribe.h plus every
+# family extension header, so the generator sees the whole public surface in
+# one translation unit.
+#
+# Regenerate with:  dart run ffigen --config ffigen.yaml
+# Then re-check include/transcribe.abihash against the value pinned in
+# lib/src/abi.dart — if it moved, the engine's ABI changed and this file's
+# output must be reviewed, not just regenerated.
+name: TranscribeBindings
+description: |
+  Raw FFI bindings to the transcribe.cpp C API. Generated — do not edit.
+  The hand-written Dart API in lib/src/ wraps this.
+output: 'lib/src/bindings.g.dart'
+headers:
+  entry-points:
+    - '../transcribe.cpp/include/transcribe/extensions.h'
+    - 'src/transcribe_shim.h'
+    - 'src/silero_vad.h'
+    - 'src/audio_ring.h'
+  include-directives:
+    # Matched against resolved absolute paths, so anchor on a trailing glob
+    # rather than the relative '../' spelling used for entry-points.
+    - '**/transcribe.cpp/include/**'
+    - '**/transcribe_cpp/src/**'
+compiler-opts:
+  - '-I../transcribe.cpp/include'
+functions:
+  include:
+    - 'transcribe_.*'
+    - 'tcshim_.*'
+    - 'silero_vad_.*'
+    - 'audio_ring_.*'
+structs:
+  include:
+    - 'transcribe_.*'
+    - 'tcshim_.*'
+    - 'silero_vad'
+    - 'audio_ring'
+enums:
+  include:
+    - 'transcribe_.*'
+typedefs:
+  include:
+    - 'transcribe_.*'
+preamble: |
+  // GENERATED — do not edit. See ffigen.yaml.
+  // ignore_for_file: always_specify_types, camel_case_types, non_constant_identifier_names, unused_element, unused_field, constant_identifier_names, no_leading_underscores_for_local_identifiers
+comments:
+  style: any
+  length: brief
