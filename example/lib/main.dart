@@ -185,9 +185,7 @@ class _DictationPageState extends State<DictationPage> {
         dictation.results.listen(
           (r) {
             if (r.isFinal) {
-              // Logged with the gain that was in force when it closed, which is
-              // the number that explains the level the model actually saw.
-              log.utterance(r, gain: _level.gain);
+              log.utterance(r);
             } else {
               log.provisional(r);
             }
@@ -326,10 +324,7 @@ class _DictationPageState extends State<DictationPage> {
         // Subscribe before running: Replay deliberately waits, because these
         // are broadcast streams and anything emitted first would be lost.
         final subs = [
-          replay.results.listen(
-            (r) => log.utterance(r, gain: _level.gain),
-            onError: log.error,
-          ),
+          replay.results.listen(log.utterance, onError: log.error),
           replay.levels.listen(log.level),
         ];
 

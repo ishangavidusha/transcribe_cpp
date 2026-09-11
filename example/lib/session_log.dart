@@ -96,6 +96,17 @@ class SessionLog {
   var _gainMin = double.infinity;
   var _gainMax = 0.0;
   var _gainSum = 0.0;
+
+  /// Gain in force at the last level update, which is what an utterance row
+  /// reports — the number that explains the level the model actually saw.
+  ///
+  /// Read from the level stream rather than passed in by the caller. It used
+  /// to be a parameter, and the replay loop passed the *live* capture's level,
+  /// which is reset to 1.0x and never updated during a replay: every replay
+  /// row in session_004 printed `gain=1.0x` while its own in/out levels imply
+  /// a median of 4.3x. The summary line was right the whole time, because it
+  /// came from here. Both paths now read the same source and cannot disagree.
+  var _gainLatest = 1.0;
   var _noise = 0.0;
   var _levels = 0;
   var _voicedWindows = 0;
@@ -151,7 +162,7 @@ class SessionLog {
   /// One line per finished utterance. This is the row that carries the
   /// evidence: where it was cut, how loud it was, and how far behind the live
   /// text had fallen by the time it closed.
-  void utterance(UtteranceResult r, {required double gain}) {
+  void utterance(UtteranceResult r) {
     final u = r.utterance;
     final text = r.text.trim();
     _utterances++;
@@ -185,7 +196,7 @@ class SessionLog {
       '[${_pad(_utterances.toString(), 3)}] '
       '${_pad(_s(u.start), 6)}+${_pad(_s(u.duration), 5)} '
       'in=${_pad(inDb == null ? '-' : '${inDb.toStringAsFixed(1)}dB', 8)} '
-      'gain=${_pad('${gain.toStringAsFixed(1)}x', 6)} '
+      'gain=${_pad('${_gainLatest.toStringAsFixed(1)}x', 6)} '
       'out=${_pad('${_dbfs(rms).toStringAsFixed(1)}dB', 8)} '
       'peak=${_pad(peak.toStringAsFixed(2), 5)} '
       'decode=${_pad('${r.decode.inMilliseconds}ms', 6)} '
@@ -220,6 +231,7 @@ class SessionLog {
       _sessionInSum += l.inputRms;
       _sessionInCount++;
     }
+    _gainLatest = l.gain;
     _gainSum += l.gain;
     if (l.gain < _gainMin) _gainMin = l.gain;
     if (l.gain > _gainMax) _gainMax = l.gain;
