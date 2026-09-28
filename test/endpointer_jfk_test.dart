@@ -65,7 +65,10 @@ void main() {
         final (events, probabilities) = _runJfk(const EndpointerConfig());
         final utterances = _utterances(events);
 
-        expect(utterances, hasLength(5));
+        // One split per rhetorical pause, and no more. At 250 ms there was a
+        // fifth: the 320 ms gap before his last word, a mid-sentence pause
+        // that 400 ms is meant to bridge.
+        expect(utterances, hasLength(4));
         expect(utterances.every((u) => !u.truncated), isTrue);
         expect(
           events.whereType<SpeechDiscarded>(),
@@ -115,9 +118,17 @@ void main() {
       // carried its post-roll through window 338, so the burst begins 64 ms
       // after the audio actually stopped, and reattachWithin sees it for what
       // it is: the rest of the same sentence.
+      //
+      // The default hangover no longer creates this case — 400 ms bridges the
+      // 320 ms gap outright — so it is pinned at 250 ms, where it arises.
+      // Re-attachment still matters at the default: any pause just longer
+      // than the hangover produces the same shape.
       const tail = Duration(milliseconds: 341 * 32);
+      const hangover = Duration(milliseconds: 250);
 
-      final kept = _utterances(_runJfk(const EndpointerConfig()).$1);
+      final kept = _utterances(
+        _runJfk(const EndpointerConfig(hangover: hangover)).$1,
+      );
       expect(kept.any((u) => u.start <= tail && tail < u.end), isTrue);
 
       // Turn re-attachment off and the old behaviour is back — except that it
@@ -127,7 +138,10 @@ void main() {
       // which is precisely why a peak-probability rule could not have saved
       // it and proximity could.
       final (events, _) = _runJfk(
-        const EndpointerConfig(reattachWithin: Duration.zero),
+        const EndpointerConfig(
+          hangover: hangover,
+          reattachWithin: Duration.zero,
+        ),
       );
       expect(
         _utterances(events).any((u) => u.start <= tail && tail < u.end),

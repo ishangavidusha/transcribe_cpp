@@ -83,7 +83,7 @@ class _DictationPageState extends State<DictationPage> {
   static const _stableAgreement = 2;
 
   int _selected = 0;
-  _Preset _preset = _Preset.eager;
+  _Preset _preset = _Preset.balanced;
   bool _normalize = true;
 
   Transcriber? _transcriber;
@@ -290,7 +290,12 @@ class _DictationPageState extends State<DictationPage> {
           <({String label, EndpointerConfig ep, NormalizerConfig? n})>[
             for (final p in _Preset.values)
               (label: p.label, ep: p.endpointer, n: const NormalizerConfig()),
-            (label: 'eager, no gain', ep: _Preset.eager.endpointer, n: null),
+            // Gain off, measured against the default preset.
+            (
+              label: 'balanced, no gain',
+              ep: _Preset.balanced.endpointer,
+              n: null,
+            ),
           ];
 
       for (var i = 0; i < matrix.length; i++) {

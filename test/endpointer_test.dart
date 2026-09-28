@@ -55,7 +55,7 @@ void main() {
   // Derived from the defaults; asserted so a config change that shifts these
   // shows up here rather than as a mysterious off-by-one in another test.
   const minSpeechWindows = 8; // 250 ms
-  const hangoverWindows = 8; // 250 ms
+  const hangoverWindows = 13; // 400 ms
   const preRollWindows = 10; // 300 ms
   const postRollWindows = 8; // 250 ms
   const reattachWindows = 13; // 400 ms
@@ -86,11 +86,11 @@ void main() {
       expect(u.speechEnd, const Duration(milliseconds: 1600)); // past window 49
       expect(u.end, const Duration(milliseconds: 1856)); // past window 57
 
-      // Endpoint declared one hangover after the last speech window. Equal to
-      // u.end here because postRoll and the default hangover are both 250 ms:
-      // every window the hangover waits out is a window post-roll keeps. A
-      // postRoll longer than the hangover would simply be clipped.
-      expect(ended.at, const Duration(milliseconds: 1856)); // past window 57
+      // Endpoint declared one hangover after the last speech window: 13
+      // windows past window 49. Later than u.end, because post-roll keeps only
+      // 250 ms of the 400 ms the hangover waits out — the rest is silence the
+      // model never needs to see.
+      expect(ended.at, const Duration(milliseconds: 2016)); // past window 62
     });
 
     test('discards speech too short to confirm, but says so', () {

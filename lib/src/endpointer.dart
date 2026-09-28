@@ -16,7 +16,7 @@ class EndpointerConfig {
     this.silenceThreshold = 0.35,
     this.minSpeechDuration = const Duration(milliseconds: 250),
     this.reattachWithin = const Duration(milliseconds: 400),
-    this.hangover = const Duration(milliseconds: 250),
+    this.hangover = const Duration(milliseconds: 400),
     this.preRoll = const Duration(milliseconds: 300),
     this.postRoll = const Duration(milliseconds: 250),
     this.maxUtterance = const Duration(seconds: 20),
@@ -83,22 +83,28 @@ class EndpointerConfig {
   /// talking and is waiting out this timer before decode even begins. It is
   /// also what protects mid-sentence pauses from being cut in half.
   ///
-  /// 250 ms, against the 400 ms this defaulted to before, because measurement
-  /// contradicted the reasoning behind 400. Two eight-minute sessions replayed
-  /// at 250 / 400 / 700 ms on identical audio scored 3.74 / 3.80 / 4.35% WER
-  /// with parakeet and 4.55 / 4.82 / 6.86% with moonshine: shorter is at worst
-  /// tied, and every step longer is worse for both models.
+  /// 400 ms. It was briefly 250 ms, on the strength of a podcast replay that
+  /// scored 250 / 400 / 700 ms at 3.74 / 3.80 / 4.35% WER with parakeet — but
+  /// on a paired test that recording cannot tell any of those apart (p >= 0.3),
+  /// so it never supported the change it was used for.
   ///
-  /// The mechanism is [maxUtterance], not the hangover itself. A longer
-  /// hangover builds longer utterances, and longer utterances hit the cap — 9
-  /// to 11 truncations per session at 700 ms against **none at all** at
-  /// 250 ms — and a truncated seam is by far the most error-prone place in a
-  /// transcript. Avoiding the cap is worth more than the fragmentation costs.
+  /// Real conversation can. A 31-minute two-person visit, replayed at
+  /// 250 / 400 / 700 ms and scored against a full reference: 8.51 / 7.93 /
+  /// 7.83% WER. 250 ms costs 28 errors against 400 ms, p = 0.005 on a paired
+  /// block bootstrap; 400 and 700 ms are tied (p = 0.76).
   ///
-  /// The fragmentation is real and is the thing to watch if this is revisited:
-  /// 250 ms yields ~120 utterances of ~3.5 s where 400 ms yields ~80 of
-  /// ~5.5 s. That is more decode calls for the same audio, and less left
-  /// context in each.
+  /// The mechanism is fragmentation. People pause mid-sentence in
+  /// conversation, and 250 ms treats those pauses as endings: it made 181 cuts
+  /// that 400 ms did not, 17 of its 28 extra errors sat within four words of
+  /// them, and it produced 128 utterances under 1.5 s against 53. Each fragment
+  /// is decoded without the words around it.
+  ///
+  /// The cost of going longer is [maxUtterance]. A longer hangover builds
+  /// longer utterances, those hit the cap, and a truncated seam is the most
+  /// error-prone place in a transcript: 0 / 3 / 24 truncations at 250 / 400 /
+  /// 700 ms on the same conversation. 700 ms buys no accuracy for that and
+  /// makes the user wait 300 ms longer on every turn. 400 ms is where the
+  /// fragmentation stops paying and the truncations have not started.
   final Duration hangover;
 
   /// Audio retained from *before* the onset window.
