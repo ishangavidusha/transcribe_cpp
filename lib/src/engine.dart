@@ -5,6 +5,7 @@ import 'package:ffi/ffi.dart';
 
 import 'bindings.g.dart';
 import 'library.dart';
+import 'native_string.dart';
 import 'status.dart';
 import 'transcript.dart';
 
@@ -12,11 +13,10 @@ import 'transcript.dart';
 ///
 /// Every text pointer transcribe.cpp returns is session-owned and dies on the
 /// next run/feed, so this copy is not an optimisation to skip.
-String _str(Pointer<Char> p) =>
-    p == nullptr ? '' : p.cast<Utf8>().toDartString();
+String _str(Pointer<Char> p) => decodeNativeText(p);
 
 String? _strOrNull(Pointer<Char> p) =>
-    p == nullptr ? null : p.cast<Utf8>().toDartString();
+    p == nullptr ? null : decodeNativeText(p);
 
 void _check(transcribe_status s, String context) {
   if (s == transcribe_status.TRANSCRIBE_OK) return;

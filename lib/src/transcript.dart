@@ -65,6 +65,10 @@ class Token {
 
   final int startMs;
   final int endMs;
+
+  /// The token's text. Byte-level tokenizers can split one character across
+  /// tokens, so a token may begin or end with U+FFFD where it holds only part
+  /// of a character. Joined text is in [Word.text] and [Transcript.text].
   final String text;
 }
 

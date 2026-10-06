@@ -6,6 +6,7 @@ import 'package:ffi/ffi.dart';
 import 'bindings.g.dart';
 import 'engine.dart';
 import 'library.dart';
+import 'native_string.dart';
 import 'status.dart';
 import 'transcript.dart';
 
@@ -143,8 +144,8 @@ class TranscribeStream {
   }
 
   static String _utf8(Pointer<Char> p, int bytes) {
-    if (p == nullptr || bytes == 0) return '';
-    return p.cast<Utf8>().toDartString(length: bytes);
+    if (bytes == 0) return '';
+    return decodeNativeText(p, length: bytes);
   }
 
   static StreamUpdate _mapUpdate(transcribe_stream_update u) => StreamUpdate(
