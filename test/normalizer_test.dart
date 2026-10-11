@@ -3,7 +3,8 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:transcribe_cpp/transcribe_cpp.dart';
+import 'package:transcribe_cpp/src/normalizer.dart';
+import 'package:transcribe_cpp/src/vad.dart';
 
 /// Speech-like audio: bursts of tone separated by pauses that are only room
 /// noise, in whole 512-sample blocks.

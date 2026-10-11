@@ -3,7 +3,8 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transcribe_cpp/src/reader.dart';
-import 'package:transcribe_cpp/transcribe_cpp.dart';
+import 'package:transcribe_cpp/src/endpointer.dart';
+import 'package:transcribe_cpp/src/vad.dart';
 
 /// Replays a fixed probability trace, so the "VAD" is a pure function of how
 /// many windows it has seen — which is what makes two runs comparable at all.

@@ -2,6 +2,9 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transcribe_cpp/transcribe_cpp.dart';
+import 'package:transcribe_cpp/src/endpointer.dart';
+import 'package:transcribe_cpp/src/pipeline.dart';
+import 'package:transcribe_cpp/src/vad.dart';
 
 class _ScriptedVad implements VadModel {
   _ScriptedVad(this.script);

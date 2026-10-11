@@ -7,6 +7,9 @@ import 'package:transcribe_cpp/src/activity.dart' as activity;
 import 'package:transcribe_cpp/src/reader.dart';
 import 'package:transcribe_cpp/src/session.dart';
 import 'package:transcribe_cpp/transcribe_cpp.dart';
+import 'package:transcribe_cpp/src/endpointer.dart';
+import 'package:transcribe_cpp/src/pipeline.dart';
+import 'package:transcribe_cpp/src/vad.dart';
 
 /// A VAD that replays a probability per window, ignoring the audio.
 class _ScriptedVad implements VadModel {

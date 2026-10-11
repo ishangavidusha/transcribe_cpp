@@ -21,7 +21,7 @@ class Wav {
 
   static const _headerBytes = 58;
 
-  /// Reads a mono WAV into float32 samples in [-1, 1].
+  /// Reads a mono WAV into float32 samples in `[-1, 1]`.
   ///
   /// Throws if the file is not mono, not [vadSampleRate], or not one of the two
   /// supported sample formats — silently resampling or downmixing here would

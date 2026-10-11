@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:transcribe_cpp/transcribe_cpp.dart';
+import 'package:transcribe_cpp/src/live.dart';
 
 void main() {
   group('Live', () {

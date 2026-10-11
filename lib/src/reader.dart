@@ -39,7 +39,8 @@ class LiveLevel {
     required this.inputRms,
   });
 
-  /// The VAD's speech probability for the most recent 32 ms window, in [0, 1].
+  /// The VAD's speech probability for the most recent 32 ms window, in
+  /// `[0, 1]`.
   ///
   /// The immediate signal: no confirmation delay, no hangover. This is what a
   /// level or "hearing you" indicator should follow.

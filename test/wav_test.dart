@@ -3,7 +3,8 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:transcribe_cpp/transcribe_cpp.dart';
+import 'package:transcribe_cpp/src/vad.dart';
+import 'package:transcribe_cpp/src/wav.dart';
 
 Float32List _tone(int samples) => Float32List.fromList([
   for (var i = 0; i < samples; i++)

@@ -259,7 +259,8 @@ class _DictationPageState extends State<DictationPage> {
           label: run.label,
           replay: true,
           audioDuration: Duration(
-            microseconds: audio.length * 1000000 ~/ vadSampleRate,
+            microseconds:
+                audio.length * 1000000 ~/ TranscribeSession.sampleRate,
           ),
         );
         _log = log;

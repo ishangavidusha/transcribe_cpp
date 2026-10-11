@@ -101,6 +101,11 @@ final class TranscribeSession {
     int threads = 0,
   }) => openSessionAt(model.path, threads: threads);
 
+  /// The rate every model, the VAD and [replay] expect: mono float32 at
+  /// 16 kHz. The microphone path resamples to it natively; audio handed to
+  /// [replay] must already be at it.
+  static const sampleRate = vadSampleRate;
+
   final UtteranceDecoder _decoder;
   final Uint8List _weights;
   final SessionSources _sources;
@@ -216,7 +221,7 @@ final class TranscribeSession {
     await _finish(run);
   }
 
-  /// Feeds [audio] (mono float32, 16 kHz) through the same pipeline the
+  /// Feeds [audio] (mono float32 at [sampleRate]) through the same pipeline the
   /// microphone drives, and completes once every utterance is decoded and
   /// delivered.
   ///

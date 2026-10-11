@@ -1,7 +1,8 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:transcribe_cpp/transcribe_cpp.dart';
+import 'package:transcribe_cpp/src/endpointer.dart';
+import 'package:transcribe_cpp/src/vad.dart';
 
 /// A [VadModel] that replays a fixed probability per window.
 ///

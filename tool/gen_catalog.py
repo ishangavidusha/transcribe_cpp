@@ -142,6 +142,8 @@ def main():
     out += ["];", ""]
     with open(a.out, "w") as fh:
         fh.write("\n".join(out))
+    # Formatted here so a `dart format` over lib/ leaves the file alone.
+    subprocess.run(["dart", "format", a.out], check=True, capture_output=True)
 
     variants = len({e[0]["variant"] for e in entries})
     print(f"{len(entries)} files across {variants} models -> {a.out}", file=sys.stderr)

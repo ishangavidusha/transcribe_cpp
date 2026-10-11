@@ -11,7 +11,7 @@ No network calls, no API keys, no audio leaving the device.
 
 ## What is in the box
 
-- **Transcription** — batch and streaming, run on a helper isolate so decoding
+- **Transcription** — utterance by utterance, on a helper isolate so decoding
   never blocks the UI.
 - **Microphone capture** (iOS) over `AVAudioEngine`, surviving route changes,
   interruptions and media-services resets. Audio reaches Dart through a
@@ -39,9 +39,10 @@ the capture layer landed.
 
 ## Audio format
 
-Audio in must be **mono float32 at 16 kHz**, samples in `[-1, 1]`. The engine
-links no resampler by design, so rate conversion belongs to the caller.
-`MicrophoneCapture` already delivers audio in this format.
+The models take **mono float32 at 16 kHz**, samples in `[-1, 1]`. The
+microphone path delivers that itself; it matters for `TranscribeSession.replay`,
+whose input must already be in that format. The engine links no resampler by
+design, so converting a recording is the caller's job.
 
 ## Models
 
