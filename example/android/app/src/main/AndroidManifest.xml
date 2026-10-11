@@ -1,7 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Model downloads. transcribe_cpp declares no permissions of its own;
+    <!-- Model downloads and the microphone. transcribe_cpp declares no permissions of its own;
          network and microphone access are the app's to ask for. -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <application
         android:label="transcribe_cpp_example"
         android:name="${applicationName}"

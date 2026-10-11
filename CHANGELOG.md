@@ -33,11 +33,12 @@ export should be treated as unstable.
 - Android (API 24+, arm64-v8a and x86_64), CPU only: the same engine release,
   prebuilt, with one CPU build per feature tier (dotprod, fp16, i8mm) and the
   fastest one the phone supports chosen at startup. Models are stored in the
-  no-backup directory. Microphone capture is not available on Android yet;
-  `replay()` is.
+  no-backup directory.
 - Microphone capture on iOS over `AVAudioEngine`, surviving route changes,
-  interruptions and media-services resets. Audio reaches Dart through a
-  lock-free ring read over FFI, never across a method channel.
+  interruptions and media-services resets, and on Android over `AudioRecord`,
+  reporting `interrupted` while the system silences the microphone (Android
+  10+) and rebuilding after an audio-server restart. Audio reaches Dart
+  through a lock-free ring read over FFI, never across a method channel.
 - Hands-free endpointing (`EndpointerConfig`) with hysteresis, minimum speech
   duration, hangover and pre/post-roll, driven by a from-scratch C port of
   Silero VAD whose 16 kHz weights ship as an asset (~1.2 MB), so endpointing

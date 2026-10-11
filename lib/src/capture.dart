@@ -13,12 +13,19 @@ enum CaptureState {
   starting,
   running,
 
-  /// A call, Siri, or another app took the audio session. Capture resumes by
-  /// itself if the interrupting app releases it cleanly.
+  /// A call, the assistant, or another app took the microphone. Capture
+  /// resumes by itself if the interrupting app releases it cleanly.
+  ///
+  /// On Android the recording keeps running and delivers silence instead, and
+  /// this is also reported when the app goes to the background without a
+  /// microphone foreground service, or the user turns on the microphone
+  /// privacy toggle. Android reports silencing from version 10; before that,
+  /// it looks like the user went quiet.
   interrupted,
 
-  /// Rebuilding after an interruption, a route change, or a media-services
-  /// reset. Audio is not arriving right now but is expected to shortly.
+  /// Rebuilding after an interruption, a route change, a media-services reset
+  /// (iOS) or an audio-server restart (Android). Audio is not arriving right
+  /// now but is expected to shortly.
   recovering,
 
   /// Capture stopped and will not resume without another [MicrophoneCapture.start].
@@ -84,16 +91,17 @@ class MicrophoneCapture {
 
   /// Asks for microphone permission, returning whether it was granted.
   ///
-  /// A false here can mean "just denied" or "denied some time ago and iOS did
-  /// not even ask" — the system only prompts once. Send the user to Settings
-  /// rather than calling this again in a loop.
+  /// A false here can mean "just denied" or "denied some time ago and the
+  /// system did not even ask" — iOS prompts once, Android twice. Send the user
+  /// to Settings rather than calling this again in a loop.
   static Future<bool> requestPermission() async =>
       await _methods.invokeMethod<bool>('requestPermission') ?? false;
 
   /// Starts capture and returns where the audio will appear.
   ///
-  /// [voiceProcessing] turns on Apple's echo cancellation, noise suppression
-  /// and automatic gain. Off by default: speech models want the cleanest signal
+  /// [voiceProcessing] turns on the platform's echo cancellation, noise
+  /// suppression and automatic gain (Apple's voice processing; Android's
+  /// VOICE_COMMUNICATION source). Off by default: speech models want the cleanest signal
   /// they can get, and the processing chain is tuned for telephony
   /// intelligibility rather than transcription. Turn it on when the app plays
   /// audio while listening — without it the app transcribes its own output.

@@ -6,16 +6,17 @@ ggml/GGUF speech engine — with Metal acceleration on iOS and CPU on Android.
 
 No network calls, no API keys, no audio leaving the device.
 
-> **Pre-release.** Not published to pub.dev. Android transcribes recordings
-> but has no microphone capture yet, and the public API is still being shaped —
-> treat every export as unstable.
+> **Pre-release.** Not published to pub.dev, and the public API is still being
+> shaped — treat every export as unstable.
 
 ## What is in the box
 
 - **Transcription** — utterance by utterance, on a helper isolate so decoding
   never blocks the UI.
-- **Microphone capture** (iOS) over `AVAudioEngine`, surviving route changes,
-  interruptions and media-services resets. Audio reaches Dart through a
+- **Microphone capture** over `AVAudioEngine` on iOS, surviving route changes,
+  interruptions and media-services resets, and `AudioRecord` on Android,
+  reporting when the system silences it and rebuilding after an audio-server
+  restart. Audio reaches Dart through a
   lock-free ring read over FFI; it never crosses a method channel.
 - **Voice activity detection** — Silero VAD, ported to C and bundled as a
   ~1.2 MB weights asset, so endpointing costs no second inference runtime.
@@ -32,7 +33,7 @@ No network calls, no API keys, no audio leaving the device.
 | Flutter | 3.3.0+ |
 | Dart SDK | 3.12.2+ |
 | iOS | 16.0+ (the xcframework slices refuse to link below this) |
-| Android | API 24+, arm64-v8a and x86_64. `replay()` only: microphone capture is not written yet |
+| Android | API 24+, arm64-v8a and x86_64. Bluetooth headset microphones are not used yet |
 
 Swift Package Manager is the supported iOS integration path. A CocoaPods
 podspec exists for apps that have not migrated, but it is **unverified** since
@@ -82,9 +83,13 @@ are stored outside backups — Application Support excluded from iCloud on iOS,
 the no-backup directory on Android — and a file is only installed once its size
 and SHA-256 match the catalogue.
 
-The plugin declares no permissions. On Android, an app that downloads models
-needs `android.permission.INTERNET` in its own manifest; debug builds add it
-automatically, so its absence first shows up in a release build. Model
+The plugin declares no permissions. On Android, an app declares
+`android.permission.RECORD_AUDIO` to listen and `android.permission.INTERNET`
+to download models, in its own manifest. Debug builds add INTERNET
+automatically, so its absence first shows up in a release build. Android
+silences the microphone of an app in the background unless the app runs a
+foreground service of type `microphone`; the session reports that as
+`CaptureState.interrupted`. Model
 licences differ, and some are non-commercial: check
 `ModelDescriptor.license` before shipping one.
 

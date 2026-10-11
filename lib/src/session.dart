@@ -162,11 +162,13 @@ final class TranscribeSession {
 
   /// Starts the microphone and transcribes until [stop].
   ///
-  /// Asks for microphone permission first; iOS only prompts once, so a
-  /// denial throws [StateError] and the app should send the user to
-  /// Settings rather than call this again. [text] is cleared.
+  /// Asks for microphone permission first. The system stops prompting after
+  /// a denial (iOS after one, Android after two), so a denial throws
+  /// [StateError] and the app should send the user to Settings rather than
+  /// call this again. On Android the app must declare
+  /// `android.permission.RECORD_AUDIO` in its manifest. [text] is cleared.
   ///
-  /// [voiceProcessing] turns on Apple's echo cancellation and noise
+  /// [voiceProcessing] turns on the platform's echo cancellation and noise
   /// suppression. Off by default: the chain is tuned for calls, not
   /// transcription. Turn it on when the app plays audio while listening.
   ///
@@ -535,8 +537,9 @@ final class _IsolateSource implements ReaderSource {
 Future<ReaderSource> _startCapture(ReaderSettings s) async {
   if (!await MicrophoneCapture.requestPermission()) {
     throw StateError(
-      'Microphone permission denied. iOS only prompts once, so send the '
-      'user to Settings rather than calling start again.',
+      'Microphone permission denied. The system stops asking after the user '
+      'declines (once on iOS, twice on Android), so send the user to '
+      'Settings rather than calling start again.',
     );
   }
 

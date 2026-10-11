@@ -25,6 +25,8 @@ target_compile_options(transcribe_cpp PRIVATE -O3)
 target_link_libraries(transcribe_cpp PRIVATE m dl)
 
 if (ANDROID)
+  # The microphone's AudioRecord writes into the ring through JNI.
+  target_sources(transcribe_cpp PRIVATE "capture_jni.c")
   # Engine log messages go to logcat (see tcshim_log_cb).
   target_link_libraries(transcribe_cpp PRIVATE log)
   # Android 15 devices with 16 KB pages refuse libraries aligned for 4 KB.
