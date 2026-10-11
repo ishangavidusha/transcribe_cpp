@@ -33,6 +33,13 @@ public class TranscribeCppPlugin: NSObject, FlutterPlugin {
             binaryMessenger: registrar.messenger()
         )
         events.setStreamHandler(instance)
+
+        // File system only; nothing here touches the capture object.
+        let storage = FlutterMethodChannel(
+            name: "transcribe_cpp/storage",
+            binaryMessenger: registrar.messenger()
+        )
+        storage.setMethodCallHandler(ModelStorage.handle)
     }
 
     public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
