@@ -11,8 +11,8 @@ export should be treated as unstable.
 
 ### Added
 
-- Dart FFI bindings to transcribe.cpp (ggml/GGUF), with the engine shipped as a
-  prebuilt dynamic xcframework and Metal acceleration on iOS.
+- Dart FFI bindings to transcribe.cpp 0.3.1 (ggml/GGUF), with the engine
+  shipped as a prebuilt dynamic xcframework and Metal acceleration on iOS.
 - Batch and streaming transcription on a helper isolate, so decoding never
   blocks the UI isolate.
 - Microphone capture on iOS over `AVAudioEngine`, surviving route changes,

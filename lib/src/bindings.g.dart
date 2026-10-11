@@ -188,6 +188,55 @@ class TranscribeBindings {
   late final _transcribe_init_backends_default =
       _transcribe_init_backends_defaultPtr.asFunction<int Function()>();
 
+  void transcribe_backend_init_params_init(
+    ffi.Pointer<transcribe_backend_init_params> p,
+  ) {
+    return _transcribe_backend_init_params_init(p);
+  }
+
+  late final _transcribe_backend_init_params_initPtr =
+      _lookup<
+        ffi.NativeFunction<
+          ffi.Void Function(ffi.Pointer<transcribe_backend_init_params>)
+        >
+      >('transcribe_backend_init_params_init');
+  late final _transcribe_backend_init_params_init =
+      _transcribe_backend_init_params_initPtr
+          .asFunction<
+            void Function(ffi.Pointer<transcribe_backend_init_params>)
+          >();
+
+  /// Fix the mask, then behave as transcribe_init_backends(artifact_dir), or
+  /// _default() when artifact_dir is NULL. NULL params means all defaults. Also
+  /// returns TRANSCRIBE_ERR_BACKEND if the mask was already fixed to a
+  /// different value or no device is registered afterwards.
+  transcribe_status transcribe_init_backends_ex(
+    ffi.Pointer<transcribe_backend_init_params> params,
+  ) {
+    return transcribe_status.fromValue(_transcribe_init_backends_ex(params));
+  }
+
+  late final _transcribe_init_backends_exPtr =
+      _lookup<
+        ffi.NativeFunction<
+          ffi.UnsignedInt Function(ffi.Pointer<transcribe_backend_init_params>)
+        >
+      >('transcribe_init_backends_ex');
+  late final _transcribe_init_backends_ex = _transcribe_init_backends_exPtr
+      .asFunction<int Function(ffi.Pointer<transcribe_backend_init_params>)>();
+
+  /// The effective mask: the host's (ALL until _ex()) narrowed by the env.
+  int transcribe_allowed_backends() {
+    return _transcribe_allowed_backends();
+  }
+
+  late final _transcribe_allowed_backendsPtr =
+      _lookup<ffi.NativeFunction<ffi.Uint32 Function()>>(
+        'transcribe_allowed_backends',
+      );
+  late final _transcribe_allowed_backends = _transcribe_allowed_backendsPtr
+      .asFunction<int Function()>();
+
   /// Number of compute devices currently registered with the runtime
   /// (compiled-in backends plus any modules loaded by
   /// transcribe_init_backends). A device is something a model can be placed on:
@@ -759,12 +808,13 @@ class TranscribeBindings {
       .asFunction<bool Function(ffi.Pointer<transcribe_session>)>();
 
   /// Supplemental flag for output truncation. True if the most recent decode
-  /// stopped at the model's context / generation cap before end-of-stream,
-  /// leaving the transcript incomplete. The partial transcript is preserved and
-  /// readable through the normal result accessors. Reset to false at the start
-  /// of each new decode — transcribe_run, transcribe_run_batch, and
-  /// transcribe_stream_begin (the same lifecycle as transcribe_was_aborted).
-  /// Returns false if session is NULL.
+  /// stopped before end-of-stream, at the model's context / generation cap or
+  /// because the output started repeating itself, leaving the transcript
+  /// incomplete. The partial transcript is preserved and readable through the
+  /// normal result accessors. Reset to false at the start of each new decode —
+  /// transcribe_run, transcribe_run_batch, and transcribe_stream_begin (the
+  /// same lifecycle as transcribe_was_aborted). Returns false if session is
+  /// NULL.
   bool transcribe_was_truncated(ffi.Pointer<transcribe_session> session) {
     return _transcribe_was_truncated(session);
   }
@@ -2118,6 +2168,32 @@ class TranscribeBindings {
   late final _tcshim_abort_cb = _tcshim_abort_cbPtr
       .asFunction<bool Function(ffi.Pointer<ffi.Void>)>();
 
+  /// Matches transcribe_log_callback. Pass this to transcribe_log_set with a
+  /// bitmask of permitted levels cast to void * as user_data — bit N passes
+  /// level N. Messages that pass are written to stderr; the rest are dropped.
+  void tcshim_log_cb(
+    int level,
+    ffi.Pointer<ffi.Char> msg,
+    ffi.Pointer<ffi.Void> user_data,
+  ) {
+    return _tcshim_log_cb(level, msg, user_data);
+  }
+
+  late final _tcshim_log_cbPtr =
+      _lookup<
+        ffi.NativeFunction<
+          ffi.Void Function(
+            ffi.UnsignedInt,
+            ffi.Pointer<ffi.Char>,
+            ffi.Pointer<ffi.Void>,
+          )
+        >
+      >('tcshim_log_cb');
+  late final _tcshim_log_cb = _tcshim_log_cbPtr
+      .asFunction<
+        void Function(int, ffi.Pointer<ffi.Char>, ffi.Pointer<ffi.Void>)
+      >();
+
   /// Load weights from a file produced by tool/extract_silero_weights.py.
   /// Returns NULL if the file is missing, truncated, or not a SVAD blob.
   ffi.Pointer<silero_vad> silero_vad_create(
@@ -2412,10 +2488,19 @@ enum transcribe_status {
 
   /// Returned by transcribe_run when the decode stopped because it hit the
   /// model's context / generation budget BEFORE the model emitted end-of-stream
-  /// — i.e. the transcript is incomplete. This is the "started, couldn't
-  /// finish" counterpart to INPUT_TOO_LONG, and it is a hard non-OK status by
-  /// design: a truncated transcript must not be mistaken for a complete one.
-  TRANSCRIBE_ERR_OUTPUT_TRUNCATED(18);
+  /// — i.e. the transcript is incomplete. If the partial ends in a phrase
+  /// repeating itself, the repeats are dropped (one copy kept). This is the
+  /// "started, couldn't finish" counterpart to INPUT_TOO_LONG, and it is a hard
+  /// non-OK status by design: a truncated transcript must not be mistaken for a
+  /// complete one.
+  TRANSCRIBE_ERR_OUTPUT_TRUNCATED(18),
+
+  /// Returned by transcribe_run when a greedy decode fell into repeating the
+  /// same block of tokens over and over and was stopped early, BEFORE the model
+  /// emitted end-of-stream. The repeats are dropped (one copy kept), but
+  /// whatever the audio said after the loop was never decoded, so the
+  /// transcript is incomplete.
+  TRANSCRIBE_ERR_OUTPUT_REPETITION(19);
 
   final int value;
   const transcribe_status(this.value);
@@ -2440,6 +2525,7 @@ enum transcribe_status {
     16 => TRANSCRIBE_ERR_UNSUPPORTED_ITN,
     17 => TRANSCRIBE_ERR_INPUT_TOO_LONG,
     18 => TRANSCRIBE_ERR_OUTPUT_TRUNCATED,
+    19 => TRANSCRIBE_ERR_OUTPUT_REPETITION,
     _ => throw ArgumentError('Unknown value for transcribe_status: $value'),
   };
 }
@@ -2460,7 +2546,8 @@ enum transcribe_abi_struct {
   TRANSCRIBE_ABI_SESSION_LIMITS(11),
   TRANSCRIBE_ABI_EXT(12),
   TRANSCRIBE_ABI_DEVICE_INFO(13),
-  TRANSCRIBE_ABI_SPEAKER_SEGMENT(14);
+  TRANSCRIBE_ABI_SPEAKER_SEGMENT(14),
+  TRANSCRIBE_ABI_BACKEND_INIT_PARAMS(15);
 
   final int value;
   const transcribe_abi_struct(this.value);
@@ -2481,6 +2568,7 @@ enum transcribe_abi_struct {
     12 => TRANSCRIBE_ABI_EXT,
     13 => TRANSCRIBE_ABI_DEVICE_INFO,
     14 => TRANSCRIBE_ABI_SPEAKER_SEGMENT,
+    15 => TRANSCRIBE_ABI_BACKEND_INIT_PARAMS,
     _ => throw ArgumentError('Unknown value for transcribe_abi_struct: $value'),
   };
 }
@@ -2531,10 +2619,12 @@ typedef Darttranscribe_log_callbackFunction =
 typedef transcribe_log_callback =
     ffi.Pointer<ffi.NativeFunction<transcribe_log_callbackFunction>>;
 
-/// -----------------------------------------------------------------------
+/// INSTRUCT: transcribe_run_params::prompt is the instruction and the output is
+/// free text (only full_text / raw_text are guaranteed). Offline only.
 enum transcribe_task {
   TRANSCRIBE_TASK_TRANSCRIBE(0),
-  TRANSCRIBE_TASK_TRANSLATE(1);
+  TRANSCRIBE_TASK_TRANSLATE(1),
+  TRANSCRIBE_TASK_INSTRUCT(2);
 
   final int value;
   const transcribe_task(this.value);
@@ -2542,6 +2632,7 @@ enum transcribe_task {
   static transcribe_task fromValue(int value) => switch (value) {
     0 => TRANSCRIBE_TASK_TRANSCRIBE,
     1 => TRANSCRIBE_TASK_TRANSLATE,
+    2 => TRANSCRIBE_TASK_INSTRUCT,
     _ => throw ArgumentError('Unknown value for transcribe_task: $value'),
   };
 }
@@ -2719,6 +2810,19 @@ enum transcribe_backend_request {
   };
 }
 
+final class transcribe_backend_init_params extends ffi.Struct {
+  /// sizeof(*this); set by _init()
+  @ffi.Uint64()
+  external int struct_size;
+
+  /// NULL: package-local default
+  external ffi.Pointer<ffi.Char> artifact_dir;
+
+  /// TRANSCRIBE_BACKEND_MASK_*; default ALL
+  @ffi.Uint32()
+  external int allowed_backends;
+}
+
 /// Opaque process-local compute-device handle. Handles are owned by the
 /// runtime, remain valid for the life of the process, and must not be freed.
 /// They may be compared for equality but are not persistent identifiers; use
@@ -2865,11 +2969,17 @@ final class transcribe_run_params extends ffi.Struct {
 
   external ffi.Pointer<transcribe_ext> family;
 
-  /// spec_k_drafts: n-gram-lookup speculative-decode draft length for the
-  /// offline autoregressive decode step. Family-portable strategy knob; the
-  /// family decides how K maps to its internal verify graph.
   @ffi.Int32()
   external int spec_k_drafts;
+
+  external ffi.Pointer<ffi.Pointer<ffi.Char>> vocabulary;
+
+  @ffi.Int32()
+  external int n_vocabulary;
+
+  external ffi.Pointer<ffi.Char> prompt;
+
+  external ffi.Pointer<ffi.Char> prefix;
 }
 
 /// Capabilities are semantic model properties read from GGUF KV (with
@@ -2906,13 +3016,8 @@ final class transcribe_capabilities extends ffi.Struct {
   @ffi.Bool()
   external bool supports_streaming;
 
-  /// supports_spec_decode: gates transcribe_run_params::spec_k_drafts. True
-  /// means the family's offline (transcribe_run / transcribe_run_batch) path
-  /// implements n-gram-lookup speculative decoding. A non-zero spec_k_drafts on
-  /// a model with supports_spec_decode == false is silently ignored — the run
-  /// proceeds as ordinary autoregression. This is a soft gate (no error)
-  /// because spec is purely a performance strategy; callers can probe this bit
-  /// if they want to know whether passing K will actually do anything.
+  /// supports_spec_decode: the offline path honors
+  /// transcribe_run_params::spec_k_drafts; elsewhere it is ignored.
   @ffi.Bool()
   external bool supports_spec_decode;
 
@@ -2947,7 +3052,11 @@ enum transcribe_feature {
   TRANSCRIBE_FEATURE_CANCELLATION(3),
   TRANSCRIBE_FEATURE_PNC(4),
   TRANSCRIBE_FEATURE_ITN(5),
-  TRANSCRIBE_FEATURE_DIARIZATION(6);
+  TRANSCRIBE_FEATURE_DIARIZATION(6),
+  TRANSCRIBE_FEATURE_VOCABULARY(7),
+  TRANSCRIBE_FEATURE_CONTEXT_PROMPT(8),
+  TRANSCRIBE_FEATURE_INSTRUCT(9),
+  TRANSCRIBE_FEATURE_TRANSCRIPT_PREFIX(10);
 
   final int value;
   const transcribe_feature(this.value);
@@ -2960,6 +3069,10 @@ enum transcribe_feature {
     4 => TRANSCRIBE_FEATURE_PNC,
     5 => TRANSCRIBE_FEATURE_ITN,
     6 => TRANSCRIBE_FEATURE_DIARIZATION,
+    7 => TRANSCRIBE_FEATURE_VOCABULARY,
+    8 => TRANSCRIBE_FEATURE_CONTEXT_PROMPT,
+    9 => TRANSCRIBE_FEATURE_INSTRUCT,
+    10 => TRANSCRIBE_FEATURE_TRANSCRIPT_PREFIX,
     _ => throw ArgumentError('Unknown value for transcribe_feature: $value'),
   };
 }
@@ -3450,13 +3563,27 @@ final class audio_ring extends ffi.Opaque {}
 
 const int TRANSCRIBE_VERSION_MAJOR = 0;
 
-const int TRANSCRIBE_VERSION_MINOR = 2;
+const int TRANSCRIBE_VERSION_MINOR = 3;
 
-const int TRANSCRIBE_VERSION_PATCH = 2;
+const int TRANSCRIBE_VERSION_PATCH = 1;
 
-const String TRANSCRIBE_VERSION = '0.2.2';
+const String TRANSCRIBE_VERSION = '0.3.1';
 
-const int TRANSCRIBE_VERSION_NUMBER = 202;
+const int TRANSCRIBE_VERSION_NUMBER = 301;
+
+const int TRANSCRIBE_BACKEND_MASK_CPU = 1;
+
+const int TRANSCRIBE_BACKEND_MASK_METAL = 2;
+
+const int TRANSCRIBE_BACKEND_MASK_VULKAN = 4;
+
+const int TRANSCRIBE_BACKEND_MASK_CUDA = 8;
+
+const int TRANSCRIBE_BACKEND_MASK_ROCM = 16;
+
+const int TRANSCRIBE_BACKEND_MASK_OTHER = 2147483648;
+
+const int TRANSCRIBE_BACKEND_MASK_ALL = 4294967295;
 
 const int TRANSCRIBE_EXT_KIND_MOONSHINE_STREAMING_STREAM = 1414746957;
 
@@ -3473,6 +3600,20 @@ const int TRANSCRIBE_EXT_KIND_WHISPER_RUN = 1314015319;
 const double TRANSCRIBE_WHISPER_THOLD_DISABLED = double.infinity;
 
 const double TRANSCRIBE_WHISPER_LOGPROB_DISABLED = double.negativeInfinity;
+
+const int TCSHIM_LOG_NONE = 0;
+
+const int TCSHIM_LOG_INFO = 1;
+
+const int TCSHIM_LOG_WARN = 2;
+
+const int TCSHIM_LOG_ERROR = 3;
+
+const int TCSHIM_LOG_DEBUG = 4;
+
+const int TCSHIM_LOG_CONT = 5;
+
+const int TCSHIM_LOG_MASK_QUIET = 12;
 
 const int SILERO_VAD_SAMPLE_RATE = 16000;
 

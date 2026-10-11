@@ -29,7 +29,12 @@ enum TranscribeStatus {
 
   /// Decode hit the context budget before end-of-stream. The partial
   /// transcript is preserved and readable.
-  outputTruncated(18);
+  outputTruncated(18),
+
+  /// Decode started repeating the same tokens and was stopped (engine
+  /// 0.3.0+). One copy of the repeat is kept and the partial transcript is
+  /// readable, but audio after the loop was never decoded.
+  outputRepetition(19);
 
   const TranscribeStatus(this.code);
 
@@ -42,11 +47,15 @@ enum TranscribeStatus {
     return TranscribeStatus.invalidArg;
   }
 
-  /// True for the two statuses that are errors but still leave a usable
-  /// partial transcript on the session.
+  /// True for the statuses that are errors but still leave a usable partial
+  /// transcript on the session.
+  ///
+  /// A code missing here makes `run()` throw and the utterance is lost, so
+  /// every result-bearing code the engine adds must be listed.
   bool get hasPartialResult =>
       this == TranscribeStatus.aborted ||
-      this == TranscribeStatus.outputTruncated;
+      this == TranscribeStatus.outputTruncated ||
+      this == TranscribeStatus.outputRepetition;
 }
 
 /// Thrown for any non-OK status from the native library.

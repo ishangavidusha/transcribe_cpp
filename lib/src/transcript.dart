@@ -94,7 +94,8 @@ class Transcript {
   /// BCP-47-ish code the model reported, when the family detects language.
   final String? detectedLanguage;
 
-  /// The decode hit the model's output budget; [text] is incomplete.
+  /// The decode stopped before end-of-stream, either at the model's output
+  /// budget or because it began repeating itself; [text] is incomplete.
   final bool wasTruncated;
 
   /// The run was cancelled; [text] holds whatever completed first.
