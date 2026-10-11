@@ -36,5 +36,10 @@ export should be treated as unstable.
   release the package links. Each `ModelDescriptor` carries the file's size,
   SHA-256 and a commit-pinned download URL. Apps can add their own entries;
   `available` hides any whose family the linked engine cannot load.
+- `ModelManager`, which downloads catalogue models on request, resuming an
+  interrupted download, sharing one transfer between callers and installing a
+  file only once its size and SHA-256 match. `installed` is a `Live` map of
+  each model's status and `progressOf` a `Live` download progress. On iOS
+  models are stored in Application Support, excluded from iCloud backup.
 - `Replay`, which drives the pipeline from a recorded WAV so two configurations
   can be compared over identical audio.

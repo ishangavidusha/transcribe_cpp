@@ -23,6 +23,15 @@ export 'src/endpointer.dart'
 export 'src/engine.dart' show nativeVersion;
 export 'src/live.dart' show Live, LiveController;
 export 'src/logging.dart' show NativeLog;
+export 'src/model_download.dart'
+    show
+        CancelToken,
+        DownloadCancelledException,
+        DownloadProgress,
+        ModelDownloadException;
+export 'src/model_manager.dart' show InstalledModel, ModelManager, ModelStatus;
+export 'src/model_store.dart'
+    show InsufficientStorageException, ModelIntegrityException;
 export 'src/normalizer.dart' show AudioNormalizer, NormalizerConfig;
 export 'src/pipeline.dart'
     show UtteranceDecoder, UtteranceResult, UtteranceTranscriber, VoicePipeline;

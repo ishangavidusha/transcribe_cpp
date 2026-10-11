@@ -100,6 +100,12 @@ final class ModelDownloader {
 
   final _jobs = <ModelId, _Job>{};
 
+  /// Completes when [id]'s running transfer stops, however it ends; null
+  /// when none is running. Callers can cancel and leave while the transfer
+  /// goes on for others, so this, not a caller's own future, is when the
+  /// download is over.
+  Future<void>? transferOf(ModelId id) => _jobs[id]?.settled;
+
   /// Progress of [id]'s download, or null when none is running.
   Live<DownloadProgress>? progressOf(ModelId id) => _jobs[id]?.progress.live;
 

@@ -56,9 +56,30 @@ one to use is your decision: `parakeet-tdt_ctc-110m` measured faster and more
 accurate than `moonshine-streaming-tiny` on an iPhone 12 Pro, but the tradeoff
 between size, latency and accuracy depends on what you are building.
 
-A `ModelManager` that handles downloading, resuming, verifying and installing
-models is the next major piece of work; until it lands, fetching the file is
-the application's job.
+`ModelManager` downloads, verifies and stores them. It never picks a model or
+starts a download on its own; your app decides which models to offer and when
+to fetch one:
+
+```dart
+final models = await ModelManager.open();
+
+// Every model the linked engine can load, with size, languages and licence.
+final choices = models.available;
+
+// Download if needed, then return the verified file. Resumes a download that
+// was interrupted; callers asking for the same model share one transfer.
+final model = await models.ensure(
+  const ModelId('parakeet-tdt_ctc-110m-Q4_K_M'),
+);
+print(model.path);
+```
+
+`models.installed` is a `Live` map of each model's status for a picker, and
+`models.progressOf(id)` a `Live` progress value while one downloads. On iOS
+models are stored in Application Support, excluded from iCloud backup, and a
+file is only installed once its size and SHA-256 match the catalogue. Model
+licences differ, and some are non-commercial: check
+`ModelDescriptor.license` before shipping one.
 
 ## Running the example
 
