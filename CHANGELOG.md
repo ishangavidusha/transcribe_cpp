@@ -31,5 +31,10 @@ export should be treated as unstable.
   ceilings.
 - `Live<T>`, a state primitive that is both a `ValueListenable` and a `Stream`
   replaying its current value to each new subscriber.
+- `ModelCatalog`, the transcription models transcribe.cpp publishes at 1 GB or
+  less (58 models, 223 files), generated from the catalogue of the engine
+  release the package links. Each `ModelDescriptor` carries the file's size,
+  SHA-256 and a commit-pinned download URL. Apps can add their own entries;
+  `available` hides any whose family the linked engine cannot load.
 - `Replay`, which drives the pipeline from a recorded WAV so two configurations
   can be compared over identical audio.

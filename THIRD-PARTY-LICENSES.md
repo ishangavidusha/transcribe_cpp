@@ -6,6 +6,7 @@ prebuilt and derived artifacts below, each under its own permissive license.
 | Component | Redistributed as | License |
 |-----------|------------------|---------|
 | [transcribe.cpp](https://github.com/handy-computer/transcribe.cpp) | `ios/transcribe_cpp/Frameworks/TranscribeCpp.xcframework` (compiled) | MIT |
+| [transcribe.cpp](https://github.com/handy-computer/transcribe.cpp) | `lib/src/catalog.g.dart` (model metadata from its `catalog/`, generated) | MIT |
 | [ggml](https://github.com/ggml-org/ggml) | linked into the same framework | MIT |
 | [miniz](https://github.com/richgel999/miniz) | linked into the same framework | MIT |
 | [Silero VAD](https://github.com/snakers4/silero-vad) | `assets/silero_vad.bin` (weights, converted) | MIT |
@@ -14,6 +15,10 @@ prebuilt and derived artifacts below, each under its own permissive license.
 address, a work of the United States federal government and therefore in the
 public domain. It is the same sample transcribe.cpp and whisper.cpp ship, kept
 here so the VAD tests have a fixed, shareable input.
+
+The models listed in `lib/src/catalog.g.dart` are not redistributed: an app
+downloads them from Hugging Face. Each is under its own licence, recorded in
+its `ModelDescriptor.license`, and several are not permissive.
 
 Model weights (GGUF) are **not** redistributed by this package. They are
 downloaded at runtime from the source the application chooses, and each carries

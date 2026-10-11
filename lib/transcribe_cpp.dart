@@ -9,6 +9,7 @@ library;
 
 export 'src/capture.dart'
     show CaptureHandle, CaptureState, CaptureStatus, MicrophoneCapture;
+export 'src/catalog.dart' show ModelCatalog, ModelDescriptor, ModelId;
 export 'src/dictation.dart' show Dictation;
 export 'src/endpointer.dart'
     show
