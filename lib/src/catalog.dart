@@ -24,6 +24,7 @@ final class ModelDescriptor {
     required this.sizeBytes,
     required this.sha256,
     required this.url,
+    this.headers = const {},
   });
 
   final ModelId id;
@@ -63,6 +64,11 @@ final class ModelDescriptor {
   /// Where to fetch it. Bundled entries pin a Hugging Face commit, so the
   /// bytes behind the URL cannot change under [sha256].
   final Uri url;
+
+  /// Sent with the download request, for a repository that needs a token,
+  /// such as a gated Hugging Face repo: `{'Authorization': 'Bearer hf_...'}`.
+  /// Never forwarded when the server redirects to a different host.
+  final Map<String, String> headers;
 
   @override
   String toString() => 'ModelDescriptor($id, $sizeBytes bytes)';

@@ -104,6 +104,13 @@ final class ModelStore {
     };
   }
 
+  /// [partLength] without waiting: one `stat`, for a progress value that
+  /// must be right the moment a download is asked for.
+  int partLengthSync(ModelId id) {
+    final part = _partOf(id);
+    return part.existsSync() ? part.lengthSync() : 0;
+  }
+
   /// Bytes already downloaded for [id], where a download resumes from.
   Future<int> partLength(ModelId id) async {
     final part = _partOf(id);
@@ -127,6 +134,11 @@ final class ModelStore {
 
   /// Writes [bytes] to [model]'s `.part`, after what is there if [append],
   /// and returns the part's new length.
+  ///
+  /// If [bytes] fails part-way, what arrived before the error is on disk and
+  /// the stream's own error is rethrown. `IOSink.addStream` would close the
+  /// file on the error, and the cleanup's `close()` would then replace a
+  /// dropped connection with "File closed".
   Future<int> writePart(
     ModelDescriptor model,
     Stream<List<int>> bytes, {
@@ -138,8 +150,17 @@ final class ModelStore {
       mode: append ? FileMode.append : FileMode.write,
     );
     try {
-      await sink.addStream(bytes);
-      await sink.flush();
+      var buffered = 0;
+      await for (final chunk in bytes) {
+        sink.add(chunk);
+        buffered += chunk.length;
+        // Waiting on the disk every few MiB pauses the download while it
+        // catches up, rather than buffering a fast network in memory.
+        if (buffered >= 4 << 20) {
+          await sink.flush();
+          buffered = 0;
+        }
+      }
     } finally {
       await sink.close();
     }
@@ -179,6 +200,12 @@ final class ModelStore {
       );
     }
     return part.rename(fileOf(model.id).path);
+  }
+
+  /// Deletes [id]'s partial download, keeping any installed file.
+  Future<void> discardPart(ModelId id) async {
+    final part = _partOf(id);
+    if (await part.exists()) await part.delete();
   }
 
   /// Deletes [id]'s installed file and any partial download.
