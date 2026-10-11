@@ -41,5 +41,9 @@ export should be treated as unstable.
   file only once its size and SHA-256 match. `installed` is a `Live` map of
   each model's status and `progressOf` a `Live` download progress. On iOS
   models are stored in Application Support, excluded from iCloud backup.
-- `Replay`, which drives the pipeline from a recorded WAV so two configurations
-  can be compared over identical audio.
+- `TranscribeSession`, the entry point for transcription: open it on an
+  installed model, then `start()` and `stop()` the microphone any number of
+  times. `state`, `text` (settled and interim), `level` and `capture` are
+  `Live` values; `utterances`, `events` and `dropouts` are streams that last
+  the whole session. `replay()` runs a recording through the same pipeline,
+  so settings can be compared over identical audio.

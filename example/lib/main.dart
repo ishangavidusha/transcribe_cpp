@@ -12,7 +12,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:transcribe_cpp/transcribe_cpp.dart';
 
@@ -66,16 +65,17 @@ class DictationPage extends StatefulWidget {
 }
 
 class _DictationPageState extends State<DictationPage> {
-  static const _models = <({String label, String asset, String note})>[
+  // Ids from the bundled catalogue. Downloaded on first use, then kept.
+  static const _models = <({String label, ModelId id, String note})>[
     (
       label: 'parakeet-tdt_ctc-110m',
-      asset: 'assets/parakeet-tdt_ctc-110m-Q4_K_M.gguf',
-      note: '86 MB Q4_K_M · 2.53% WER',
+      id: ModelId('parakeet-tdt_ctc-110m-Q4_K_M'),
+      note: '90 MB Q4_K_M · 2.53% WER',
     ),
     (
       label: 'moonshine-streaming-tiny',
-      asset: 'assets/moonshine-streaming-tiny-Q8_0.gguf',
-      note: '48 MB Q8_0 · 4.52% WER',
+      id: ModelId('moonshine-streaming-tiny-Q8_0'),
+      note: '50 MB Q8_0 · 4.52% WER',
     ),
   ];
 
@@ -86,31 +86,26 @@ class _DictationPageState extends State<DictationPage> {
   _Preset _preset = _Preset.balanced;
   bool _normalize = true;
 
-  Transcriber? _transcriber;
-  Dictation? _dictation;
+  ModelManager? _manager;
+  TranscribeSession? _session;
+  final _sessionSubscriptions = <StreamSubscription<Object?>>[];
+
+  /// The log of the run in progress, live or replayed. The session's streams
+  /// last as long as it does, so every run writes to whichever log is current.
+  SessionLog? _log;
   String? _recording;
   String _compareStatus = '';
-  SessionLog? _log;
-  final _subscriptions = <StreamSubscription<Object?>>[];
 
-  final _final = StringBuffer();
   String _transcript = '';
   String _provisional = '';
   CaptureStatus _capture = const CaptureStatus(CaptureState.idle);
-  LiveLevel _level = const LiveLevel(
-    probability: 0,
-    gain: 1,
-    noise: 0,
-    inputRms: 0,
-  );
+  LiveLevel _level = LiveLevel.silent;
   bool _speaking = false;
+  bool _listening = false;
   Duration _lost = Duration.zero;
-  ModelInfo? _info;
   String _status = 'Idle';
   String? _error;
   bool _busy = false;
-
-  bool get _listening => _dictation != null;
 
   @override
   void initState() {
@@ -119,6 +114,9 @@ class _DictationPageState extends State<DictationPage> {
     // session captured before the last restart — which is usually exactly the
     // session worth looking at again.
     _findRecording();
+    ModelManager.open().then((m) {
+      if (mounted) setState(() => _manager = m);
+    });
   }
 
   Future<void> _findRecording() async {
@@ -131,32 +129,32 @@ class _DictationPageState extends State<DictationPage> {
 
   @override
   void dispose() {
-    for (final s in _subscriptions) {
-      s.cancel();
-    }
-    _dictation?.stop();
-    _transcriber?.dispose();
+    _closeSession();
     super.dispose();
+  }
+
+  Future<void> _closeSession() async {
+    final session = _session;
+    _session = null;
+    for (final s in _sessionSubscriptions) {
+      await s.cancel();
+    }
+    _sessionSubscriptions.clear();
+    await session?.dispose();
   }
 
   Future<void> _start() async {
     setState(() {
       _busy = true;
       _error = null;
-      _final.clear();
-      _transcript = '';
-      _provisional = '';
       _lost = Duration.zero;
-      _level = const LiveLevel(probability: 0, gain: 1, noise: 0, inputRms: 0);
-      _status = 'Loading model';
     });
     try {
-      await _ensureLoaded();
-
+      final session = await _ensureLoaded();
       final normalizer = _normalize ? const NormalizerConfig() : null;
       final log = SessionLog(
         model: _models[_selected].label,
-        info: _info,
+        info: session.modelInfo,
         endpointer: _preset.endpointer,
         normalizer: normalizer,
         provisionalInterval: _provisionalInterval,
@@ -170,70 +168,23 @@ class _DictationPageState extends State<DictationPage> {
       final dir = await getApplicationSupportDirectory();
       final recording = '${dir.path}/session.wav';
 
-      final dictation = await Dictation.start(
-        transcriber: _transcriber!,
-        vadWeights: await SileroVad.loadBundledWeights(),
-        config: _preset.endpointer,
+      setState(() => _status = 'Starting');
+      _log = log;
+      await session.start(
+        endpointer: _preset.endpointer,
         normalizer: normalizer,
         provisionalInterval: _provisionalInterval,
         stableAgreement: _stableAgreement,
         recordTo: recording,
       );
       log.start();
-
-      _subscriptions.addAll([
-        dictation.results.listen(
-          (r) {
-            if (r.isFinal) {
-              log.utterance(r);
-            } else {
-              log.provisional(r);
-            }
-            setState(() {
-              if (r.isFinal) {
-                _provisional = '';
-                final text = r.text.trim();
-                if (text.isEmpty) return;
-                if (_final.isNotEmpty) _final.write(' ');
-                _final.write(text);
-                _transcript = _final.toString();
-              } else {
-                // stableText, not text: only what successive decodes agree on.
-                _provisional = r.stableText.trim();
-              }
-            });
-          },
-          onError: (Object e) {
-            log.error(e);
-            setState(() => _error = '$e');
-          },
-        ),
-        dictation.events.listen((e) {
-          if (e is SpeechStarted) setState(() => _speaking = true);
-          if (e is SpeechEnded) setState(() => _speaking = false);
-          if (e is SpeechDiscarded) log.discarded(e);
-        }),
-        dictation.status.listen((s) {
-          log.captureState(s);
-          setState(() => _capture = s);
-        }),
-        dictation.levels.listen((l) {
-          log.level(l);
-          setState(() => _level = l);
-        }),
-        dictation.dropouts.listen((d) {
-          log.dropout(d);
-          setState(() => _lost += d.duration);
-        }),
-      ]);
-
       setState(() {
-        _dictation = dictation;
-        _log = log;
+        _listening = true;
         _recording = recording;
         _status = 'Listening';
       });
     } catch (e) {
+      _log = null;
       setState(() {
         _status = 'Idle';
         _error = '$e';
@@ -244,23 +195,19 @@ class _DictationPageState extends State<DictationPage> {
   }
 
   Future<void> _stop() async {
-    final dictation = _dictation;
-    if (dictation == null) return;
-    setState(() => _busy = true);
-    for (final s in _subscriptions) {
-      await s.cancel();
-    }
-    _subscriptions.clear();
-    await dictation.stop();
+    final session = _session;
+    if (session == null || !_listening) return;
+    setState(() {
+      _busy = true;
+      _status = 'Finishing';
+    });
+    await session.stop();
     // After stop, so the flushed final utterance is in the tally.
     _log?.stop();
+    _log = null;
     setState(() {
-      _dictation = null;
-      _log = null;
+      _listening = false;
       _speaking = false;
-      _provisional = '';
-      _level = const LiveLevel(probability: 0, gain: 1, noise: 0, inputRms: 0);
-      _capture = const CaptureStatus(CaptureState.idle);
       _status = 'Stopped';
       _busy = false;
     });
@@ -283,8 +230,7 @@ class _DictationPageState extends State<DictationPage> {
     });
     try {
       final audio = Wav.read(path);
-      final weights = await SileroVad.loadBundledWeights();
-      await _ensureLoaded();
+      final session = await _ensureLoaded();
 
       final matrix =
           <({String label, EndpointerConfig ep, NormalizerConfig? n})>[
@@ -303,10 +249,9 @@ class _DictationPageState extends State<DictationPage> {
         setState(
           () => _compareStatus = '${i + 1}/${matrix.length}  ${run.label}',
         );
-
         final log = SessionLog(
           model: _models[_selected].label,
-          info: _info,
+          info: session.modelInfo,
           endpointer: run.ep,
           normalizer: run.n,
           provisionalInterval: Duration.zero,
@@ -317,33 +262,20 @@ class _DictationPageState extends State<DictationPage> {
             microseconds: audio.length * 1000000 ~/ vadSampleRate,
           ),
         );
-
-        final replay = await Replay.start(
-          transcriber: _transcriber!,
-          audio: audio,
-          vadWeights: weights,
-          config: run.ep,
+        _log = log;
+        log.start();
+        await session.replay(
+          audio,
+          endpointer: run.ep,
           normalizer: run.n,
           stableAgreement: _stableAgreement,
         );
-        // Subscribe before running: Replay deliberately waits, because these
-        // are broadcast streams and anything emitted first would be lost.
-        final subs = [
-          replay.results.listen(log.utterance, onError: log.error),
-          replay.levels.listen(log.level),
-        ];
-
-        log.start();
-        await replay.run();
         log.stop();
-
-        for (final sub in subs) {
-          await sub.cancel();
-        }
-        await replay.dispose();
+        _log = null;
       }
       setState(() => _compareStatus = 'Done — see the console');
     } catch (e) {
+      _log = null;
       setState(() {
         _error = '$e';
         _compareStatus = '';
@@ -353,41 +285,73 @@ class _DictationPageState extends State<DictationPage> {
     }
   }
 
-  Future<void> _ensureLoaded() async {
-    if (_transcriber != null) return;
-    final path = await _materializeModel();
-    final transcriber = await Transcriber.open(path);
-    final info = await transcriber.info();
-    setState(() {
-      _transcriber = transcriber;
-      _info = info;
-    });
-  }
+  /// Downloads the selected model if needed, and opens a session on it once.
+  Future<TranscribeSession> _ensureLoaded() async {
+    if (_session case final session?) return session;
+    final manager = _manager ??= await ModelManager.open();
+    final id = _models[_selected].id;
 
-  /// Assets live inside the app bundle as compressed blobs; the engine needs a
-  /// real filesystem path to mmap. Copy once, reuse thereafter.
-  Future<String> _materializeModel() async {
-    final asset = _models[_selected].asset;
-    final dir = await getApplicationSupportDirectory();
-    final file = File('${dir.path}/${asset.split('/').last}');
-    if (!file.existsSync() || file.lengthSync() == 0) {
-      setState(() => _status = 'Unpacking model');
-      final data = await rootBundle.load(asset);
-      await file.writeAsBytes(data.buffer.asUint8List(), flush: true);
+    setState(() => _status = 'Preparing model');
+    final installing = manager.ensure(id);
+    final progress = manager.progressOf(id)?.stream.listen((p) {
+      setState(
+        () => _status = 'Downloading ${(p.fraction * 100).toStringAsFixed(0)}%',
+      );
+    });
+    final InstalledModel installed;
+    try {
+      installed = await installing;
+    } finally {
+      await progress?.cancel();
     }
-    return file.path;
+
+    setState(() => _status = 'Loading model');
+    final session = await TranscribeSession.open(installed);
+    _session = session;
+    _sessionSubscriptions.addAll([
+      session.utterances.listen(
+        (r) => r.isFinal ? _log?.utterance(r) : _log?.provisional(r),
+        onError: (Object e) {
+          _log?.error(e);
+          setState(() => _error = '$e');
+        },
+      ),
+      session.text.stream.listen(
+        (t) => setState(() {
+          _transcript = t.settled;
+          _provisional = t.interim;
+        }),
+      ),
+      session.events.listen((e) {
+        if (e is SpeechStarted) setState(() => _speaking = true);
+        if (e is SpeechEnded) setState(() => _speaking = false);
+        if (e is SpeechDiscarded) _log?.discarded(e);
+      }),
+      session.capture.stream.listen((s) {
+        if (_listening) _log?.captureState(s);
+        setState(() => _capture = s);
+      }),
+      session.level.stream.listen((l) {
+        _log?.level(l);
+        setState(() => _level = l);
+      }),
+      session.dropouts.listen((d) {
+        _log?.dropout(d);
+        setState(() => _lost += d.duration);
+      }),
+    ]);
+    setState(() => _status = 'Idle');
+    return session;
   }
 
   Future<void> _select(int index) async {
     if (index == _selected) return;
-    final old = _transcriber;
     setState(() {
       _selected = index;
-      _transcriber = null;
-      _info = null;
       _status = 'Idle';
     });
-    await old?.dispose();
+    await _closeSession();
+    setState(() {});
   }
 
   @override
@@ -418,7 +382,10 @@ class _DictationPageState extends State<DictationPage> {
             ),
             const SizedBox(height: 6),
             Text(
-              _models[_selected].note,
+              _manager?.installed.value[_models[_selected].id] ==
+                      ModelStatus.installed
+                  ? _models[_selected].note
+                  : '${_models[_selected].note} · downloads on first use',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.outline,
@@ -540,7 +507,7 @@ class _DictationPageState extends State<DictationPage> {
                 ],
               ],
             ),
-            if (_info case final info?) ...[
+            if (_session?.modelInfo case final info?) ...[
               const SizedBox(height: 8),
               Text(
                 '${info.isGpu ? 'GPU' : 'CPU FALLBACK'} · ${info.backend} · '

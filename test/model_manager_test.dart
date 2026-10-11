@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:transcribe_cpp/src/activity.dart' as activity;
 import 'package:transcribe_cpp/src/model_manager.dart';
 import 'package:transcribe_cpp/src/model_store.dart';
 import 'package:transcribe_cpp/transcribe_cpp.dart';
@@ -261,6 +262,46 @@ void main() {
     final done = models.ensure(const ModelId('a'));
     await expectLater(models.remove(const ModelId('a')), throwsStateError);
     await done;
+  });
+
+  group('while a session is transcribing', () {
+    setUp(() => activity.activeSessions = 1);
+    tearDown(() => activity.activeSessions = 0);
+
+    test('a new download is refused before any request', () async {
+      final models = await open();
+      await expectLater(
+        models.ensure(const ModelId('a')),
+        throwsA(
+          isA<StateError>().having(
+            (e) => e.message,
+            'message',
+            contains('session'),
+          ),
+        ),
+      );
+      expect(server.requests, isEmpty);
+      expect(
+        models.installed.value[const ModelId('a')],
+        ModelStatus.notInstalled,
+      );
+    });
+
+    test('an installed model is still returned', () async {
+      await install('a');
+      final models = await open();
+      expect((await models.ensure(const ModelId('a'))).path, isNotEmpty);
+    });
+
+    test('joining a download already running is allowed', () async {
+      activity.activeSessions = 0;
+      final models = await open();
+      final first = models.ensure(const ModelId('a'));
+      activity.activeSessions = 1;
+      final joined = models.ensure(const ModelId('a'));
+      await Future.wait([first, joined]);
+      expect(server.requests, hasLength(1));
+    });
   });
 
   test('bytesOnDisk counts installed and partial files', () async {

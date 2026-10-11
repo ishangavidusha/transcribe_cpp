@@ -70,12 +70,8 @@ flutter:
   # the package's normalizer test reads it off the filesystem as a source of
   # real speech, but nothing in the app plays it any more and shipping it would
   # be 350 KB of dead weight in the binary.
-  assets:
-    # 48 MB. Bundled as an asset only because this is a bench harness — a real
-    # app should download models on first run rather than paying for them in
-    # the App Store binary.
-    - assets/moonshine-streaming-tiny-Q8_0.gguf
-    - assets/parakeet-tdt_ctc-110m-Q4_K_M.gguf
+  # Models are not bundled either: the app downloads the one selected on first
+  # use, through ModelManager, the way a real app should.
 
   # To add assets to your application, add an assets section, like this:
   # assets:

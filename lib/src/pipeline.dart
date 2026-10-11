@@ -88,7 +88,7 @@ class UtteranceResult {
 /// Decodes submitted utterances, in order, and publishes the results.
 ///
 /// Split out from [VoicePipeline] because endpointing and decoding do not
-/// always live on the same isolate: [Dictation] runs the VAD on a reader
+/// always live on the same isolate: a session runs the VAD on a reader
 /// isolate close to the microphone and only ships finished utterances here.
 class UtteranceTranscriber {
   UtteranceTranscriber(this._decoder, {int stableAgreement = 2})

@@ -10,7 +10,6 @@ library;
 export 'src/capture.dart'
     show CaptureHandle, CaptureState, CaptureStatus, MicrophoneCapture;
 export 'src/catalog.dart' show ModelCatalog, ModelDescriptor, ModelId;
-export 'src/dictation.dart' show Dictation;
 export 'src/endpointer.dart'
     show
         Endpointer,
@@ -36,9 +35,9 @@ export 'src/normalizer.dart' show AudioNormalizer, NormalizerConfig;
 export 'src/pipeline.dart'
     show UtteranceDecoder, UtteranceResult, UtteranceTranscriber, VoicePipeline;
 export 'src/reader.dart' show Dropout, LiveLevel;
-export 'src/replay.dart' show Replay;
 export 'src/ring.dart' show AudioRingReader;
 export 'src/seam.dart' show SeamJoiner;
+export 'src/session.dart' show LiveText, SessionState, TranscribeSession;
 export 'src/stable_prefix.dart' show StablePrefix;
 export 'src/status.dart' show TranscribeStatus, TranscribeException;
 export 'src/streaming.dart' show CommitPolicy;

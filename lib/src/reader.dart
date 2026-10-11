@@ -74,6 +74,14 @@ class LiveLevel {
   /// -30 is normal, below -45 is where detection starts to suffer.
   final double inputRms;
 
+  /// Nothing heard yet: what a meter shows before the first window arrives.
+  static const silent = LiveLevel(
+    probability: 0,
+    gain: 1,
+    noise: 0,
+    inputRms: 0,
+  );
+
   @override
   String toString() =>
       'LiveLevel(p=${probability.toStringAsFixed(2)}, '
@@ -342,6 +350,9 @@ void captureLoop(ReaderBoot boot, SileroVad vad, Segmenter segmenter) {
         reader.dispose();
         vad.dispose();
         commands.close();
+        // After the flush, so the session knows the last utterance has been
+        // handed over rather than guessing how long the drain takes.
+        boot.events.send('done');
     }
   });
 

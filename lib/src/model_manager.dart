@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'activity.dart' as activity;
 import 'catalog.dart';
 import 'live.dart';
 import 'model_download.dart';
@@ -89,6 +90,10 @@ final class ModelManager {
   /// wait without stopping the others. A cancelled or failed download keeps
   /// what it received, and the next call resumes from there.
   ///
+  /// Refuses with [StateError] to start a download while a
+  /// [TranscribeSession] is listening or replaying: the transfer would
+  /// compete with the decode for memory and CPU. Stop the session first.
+  ///
   /// Throws [ArgumentError] for an id not in [catalog], [UnsupportedError]
   /// for a model the linked engine cannot load, and otherwise one of
   /// [InsufficientStorageException], [ModelDownloadException],
@@ -107,6 +112,18 @@ final class ModelManager {
     if (_status.value[id] == ModelStatus.installed &&
         await _store.isInstalled(model)) {
       return InstalledModel._(model, _store.fileOf(id).path);
+    }
+
+    if (activity.activeSessions > 0 &&
+        _downloader.transferOf(id) == null &&
+        !await _store.isInstalled(model)) {
+      // Refused, not deferred: a deferred download would start on its own
+      // the moment the session stops, which the app did not ask for at that
+      // moment. Joining a transfer already running is allowed.
+      throw StateError(
+        'a session is transcribing; downloading ${id.value} now would compete '
+        'with it for memory and CPU. Stop the session first.',
+      );
     }
 
     // Compared by identity, not null-checked: a request arriving while a

@@ -15,8 +15,9 @@ import 'package:flutter/foundation.dart';
 ///
 /// `Stream` alone cannot express the second kind. A broadcast controller drops
 /// anything added before someone subscribes, which is not a subtlety: it is
-/// why [Replay] is split into `start()` and `run()`, so a caller can subscribe
-/// in the gap. This type is what that workaround was standing in for.
+/// why the package's replay API once had to be split into `start()` and
+/// `run()`, so a caller could subscribe in the gap. This type is what that
+/// workaround was standing in for.
 ///
 /// Implements [ValueListenable] so it drops straight into a
 /// `ValueListenableBuilder`, and exposes [stream] for anything that wants to

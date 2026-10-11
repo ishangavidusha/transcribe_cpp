@@ -81,6 +81,27 @@ file is only installed once its size and SHA-256 match the catalogue. Model
 licences differ, and some are non-commercial: check
 `ModelDescriptor.license` before shipping one.
 
+## Transcribing
+
+```dart
+final session = await TranscribeSession.open(model);
+
+// Settled text plus the utterance still being spoken, ready for a text view.
+session.text.addListener(() => print(session.text.value.full));
+
+await session.start();   // asks for microphone permission the first time
+// ... the user speaks; the endpointer decides when each utterance ends ...
+await session.stop();    // waits for the last utterance to be decoded
+
+await session.dispose(); // releases the model
+```
+
+`start()` and `stop()` can repeat on one session without reloading the model.
+`state`, `text`, `level` and `capture` are `Live` values (a `ValueListenable`
+with a `stream` that replays the current value); `utterances`, `events` and
+`dropouts` are streams. `replay(samples)` feeds a recording through the same
+pipeline as the microphone, to compare settings on identical audio.
+
 ## Running the example
 
 The example app is a measurement harness as much as a demo: it prints a
@@ -88,18 +109,9 @@ per-utterance log with levels, gain, decode time and real-time factor, and can
 replay a recorded WAV under different settings to compare them over identical
 audio.
 
-It expects two models in `example/assets/`, which are gitignored because of
-their size. Fetch them from
-[huggingface.co/handy-computer](https://huggingface.co/handy-computer) before
-the first run — the filenames must match exactly, since `example/pubspec.yaml`
-declares them as assets:
-
-```
-example/assets/parakeet-tdt_ctc-110m-Q4_K_M.gguf
-example/assets/moonshine-streaming-tiny-Q8_0.gguf
-```
-
-Then:
+It downloads the selected model (parakeet-tdt_ctc-110m, 90 MB, or
+moonshine-streaming-tiny, 50 MB) through `ModelManager` the first time you
+press Start, so the first run needs a network connection.
 
 ```bash
 cd example && flutter run --release
