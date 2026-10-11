@@ -6,9 +6,10 @@ prebuilt and derived artifacts below, each under its own permissive license.
 | Component | Redistributed as | License |
 |-----------|------------------|---------|
 | [transcribe.cpp](https://github.com/handy-computer/transcribe.cpp) | `ios/transcribe_cpp/Frameworks/TranscribeCpp.xcframework` (compiled) | MIT |
+| [transcribe.cpp](https://github.com/handy-computer/transcribe.cpp) | `android/src/main/jniLibs` (compiled by `tool/build_android.sh`) | MIT |
 | [transcribe.cpp](https://github.com/handy-computer/transcribe.cpp) | `lib/src/catalog.g.dart` (model metadata from its `catalog/`, generated) | MIT |
-| [ggml](https://github.com/ggml-org/ggml) | linked into the same framework | MIT |
-| [miniz](https://github.com/richgel999/miniz) | linked into the same framework | MIT |
+| [ggml](https://github.com/ggml-org/ggml) | linked into the framework; its own libraries on Android | MIT |
+| [miniz](https://github.com/richgel999/miniz) | linked into the framework and `libtranscribe.so` | MIT |
 | [Silero VAD](https://github.com/snakers4/silero-vad) | `assets/silero_vad.bin` (weights, converted) | MIT |
 
 `example/assets/jfk.wav` is an excerpt of John F. Kennedy's 1961 inaugural

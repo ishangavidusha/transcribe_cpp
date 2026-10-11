@@ -30,6 +30,11 @@ export should be treated as unstable.
 - The transcribe.cpp 0.3.1 engine (ggml/GGUF), shipped as a prebuilt dynamic
   xcframework with Metal acceleration on iOS. Decoding runs on a helper
   isolate, so it never blocks the UI isolate.
+- Android (API 24+, arm64-v8a and x86_64), CPU only: the same engine release,
+  prebuilt, with one CPU build per feature tier (dotprod, fp16, i8mm) and the
+  fastest one the phone supports chosen at startup. Models are stored in the
+  no-backup directory. Microphone capture is not available on Android yet;
+  `replay()` is.
 - Microphone capture on iOS over `AVAudioEngine`, surviving route changes,
   interruptions and media-services resets. Audio reaches Dart through a
   lock-free ring read over FFI, never across a method channel.

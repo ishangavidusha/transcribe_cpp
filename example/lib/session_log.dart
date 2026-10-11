@@ -122,7 +122,9 @@ class SessionLog {
         ? 'unknown'
         : (info!.isGpu
               ? 'GPU/${info!.backend}'
-              : 'CPU-FALLBACK/${info!.backend}');
+              : defaultTargetPlatform == TargetPlatform.iOS
+              ? 'CPU-FALLBACK/${info!.backend}'
+              : 'CPU/${info!.backend}');
     _line('');
     _line(
       replay

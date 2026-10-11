@@ -47,6 +47,12 @@ flutter:
         ffiPlugin: true
         pluginClass: TranscribeCppPlugin
         sharedDarwinSource: false
+      android:
+        # Same split as iOS. ffiPlugin builds src/ into libtranscribe_cpp.so;
+        # the engine ships prebuilt beside it (tool/build_android.sh).
+        ffiPlugin: true
+        package: com.transcribecpp.transcribe_cpp
+        pluginClass: TranscribeCppPlugin
 
   # Silero VAD weights (~1.2 MB), extracted from the official ONNX by
   # tool/extract_silero_weights.py. Shipped with the package so apps get

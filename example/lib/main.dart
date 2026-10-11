@@ -510,11 +510,13 @@ class _DictationPageState extends State<DictationPage> {
             ),
             if (_session?.modelInfo case final info?) ...[
               const SizedBox(height: 8),
+              // CPU is only a fallback on iOS, where Metal is expected. The
+              // Android engine has no GPU backend, so CPU is the plan there.
               Text(
-                '${info.isGpu ? 'GPU' : 'CPU FALLBACK'} · ${info.backend} · '
-                '${info.variant} · ${info.architecture}',
+                '${info.isGpu ? 'GPU' : (Platform.isIOS ? 'CPU FALLBACK' : 'CPU')}'
+                ' · ${info.backend} · ${info.variant} · ${info.architecture}',
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: info.isGpu
+                  color: info.isGpu || !Platform.isIOS
                       ? theme.colorScheme.outline
                       : theme.colorScheme.error,
                 ),

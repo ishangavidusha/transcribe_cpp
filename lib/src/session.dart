@@ -95,7 +95,8 @@ final class TranscribeSession {
   /// Loads [model] and the bundled VAD.
   ///
   /// [threads] is the engine's CPU thread count; 0 lets it choose. On iOS the
-  /// heavy work runs on Metal and this rarely matters.
+  /// heavy work runs on Metal and this rarely matters; on Android the engine
+  /// runs on CPU.
   static Future<TranscribeSession> open(
     InstalledModel model, {
     int threads = 0,

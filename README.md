@@ -2,12 +2,13 @@
 
 Offline, on-device speech-to-text for Flutter. Dart FFI bindings to
 [transcribe.cpp](https://github.com/handy-computer/transcribe.cpp) — a
-ggml/GGUF speech engine — with Metal acceleration on iOS.
+ggml/GGUF speech engine — with Metal acceleration on iOS and CPU on Android.
 
 No network calls, no API keys, no audio leaving the device.
 
-> **Pre-release.** Not published to pub.dev. iOS only so far, and the public API
-> is still being shaped — treat every export as unstable.
+> **Pre-release.** Not published to pub.dev. Android transcribes recordings
+> but has no microphone capture yet, and the public API is still being shaped —
+> treat every export as unstable.
 
 ## What is in the box
 
@@ -31,7 +32,7 @@ No network calls, no API keys, no audio leaving the device.
 | Flutter | 3.3.0+ |
 | Dart SDK | 3.12.2+ |
 | iOS | 16.0+ (the xcframework slices refuse to link below this) |
-| Android | not yet — the engine cross-compiles, the capture layer is not written |
+| Android | API 24+, arm64-v8a and x86_64. `replay()` only: microphone capture is not written yet |
 
 Swift Package Manager is the supported iOS integration path. A CocoaPods
 podspec exists for apps that have not migrated, but it is **unverified** since
@@ -76,9 +77,14 @@ print(model.path);
 ```
 
 `models.installed` is a `Live` map of each model's status for a picker, and
-`models.progressOf(id)` a `Live` progress value while one downloads. On iOS
-models are stored in Application Support, excluded from iCloud backup, and a
-file is only installed once its size and SHA-256 match the catalogue. Model
+`models.progressOf(id)` a `Live` progress value while one downloads. Models
+are stored outside backups — Application Support excluded from iCloud on iOS,
+the no-backup directory on Android — and a file is only installed once its size
+and SHA-256 match the catalogue.
+
+The plugin declares no permissions. On Android, an app that downloads models
+needs `android.permission.INTERNET` in its own manifest; debug builds add it
+automatically, so its absence first shows up in a release build. Model
 licences differ, and some are non-commercial: check
 `ModelDescriptor.license` before shipping one.
 
@@ -126,18 +132,20 @@ meaningless, and the numbers the log prints are the point.
 | Path | |
 |---|---|
 | `lib/` | the Dart API; `lib/src/` is private and changes freely |
-| `src/` | this package's C — the FFI shim, the Silero port, the audio ring |
+| `src/` | this package's C — the FFI shim, the Silero port, the audio ring, the Android backend loader |
 | `ios/transcribe_cpp/` | the SwiftPM package: capture layer, C target, engine xcframework |
+| `android/` | the Gradle module: Kotlin plugin, prebuilt engine libraries in `src/main/jniLibs` |
 | `assets/` | bundled Silero VAD weights |
 | `example/` | the demo and measurement harness |
 | `test/` | Dart tests, plus two standalone C tests |
-| `tool/` | the Silero weight extractor |
+| `tool/` | the Silero weight extractor, the catalogue generator, the Android engine build |
 
 ## Building
 
 ```bash
 flutter analyze && flutter test
 cd example && flutter build ios --release --no-codesign
+cd example && flutter build apk --release
 ```
 
 The release build matters. Dart resolves FFI symbols through
@@ -149,7 +157,7 @@ build hides the problem.
 
 MIT — see [LICENSE](LICENSE).
 
-This package redistributes a compiled build of transcribe.cpp (which links ggml
+This package redistributes compiled builds of transcribe.cpp (which links ggml
 and miniz) and weights derived from Silero VAD, all MIT-licensed. See
 [THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md). Model weights are not
 redistributed and carry their own licenses from their own publishers.

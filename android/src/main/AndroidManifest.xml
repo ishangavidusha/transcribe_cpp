@@ -1,0 +1,7 @@
+<!--
+  No permissions are declared here, on purpose. Microphone and network access
+  are the app's to ask for, as they are on iOS: an app that only transcribes
+  recordings should not inherit RECORD_AUDIO from this plugin, and an app
+  advertised as offline should not inherit INTERNET.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" />

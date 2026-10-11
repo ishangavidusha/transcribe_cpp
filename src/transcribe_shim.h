@@ -78,7 +78,8 @@ TC_EXPORT bool tcshim_abort_cb(void * user_data);
 /*
  * Matches transcribe_log_callback. Pass this to transcribe_log_set with a
  * bitmask of permitted levels cast to void * as user_data — bit N passes
- * level N. Messages that pass are written to stderr; the rest are dropped.
+ * level N. Messages that pass are written to stderr, or to logcat on Android;
+ * the rest are dropped.
  *
  * `level` is declared unsigned int rather than the enum because the enum type
  * lives in a header this file cannot see. Same ABI.

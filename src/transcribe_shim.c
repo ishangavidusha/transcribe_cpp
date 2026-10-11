@@ -5,6 +5,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#if defined(__ANDROID__)
+#include <android/log.h>
+#endif
+
 struct tcshim_cancel {
     atomic_bool requested;
 };
@@ -72,6 +76,23 @@ void tcshim_log_cb(unsigned int level, const char * msg, void * user_data) {
         return;
     }
 
+#if defined(__ANDROID__)
+    /* An Android app's stderr is /dev/null, so the console the other branch
+     * writes to does not exist there. Logcat has its own levels; a
+     * continuation becomes its own entry at the level of the line it
+     * continues, since logcat cannot append to an entry. */
+    static atomic_int last_prio = ATOMIC_VAR_INIT(ANDROID_LOG_INFO);
+    int prio;
+    switch (level) {
+        case TCSHIM_LOG_CONT:  prio = atomic_load_explicit(&last_prio, memory_order_relaxed); break;
+        case TCSHIM_LOG_WARN:  prio = ANDROID_LOG_WARN;  break;
+        case TCSHIM_LOG_ERROR: prio = ANDROID_LOG_ERROR; break;
+        case TCSHIM_LOG_DEBUG: prio = ANDROID_LOG_DEBUG; break;
+        default:               prio = ANDROID_LOG_INFO;  break;
+    }
+    atomic_store_explicit(&last_prio, prio, memory_order_relaxed);
+    __android_log_write(prio, "transcribe.cpp", msg);
+#else
     if (level == TCSHIM_LOG_CONT) {
         fputs(msg, stderr);
         return;
@@ -85,4 +106,5 @@ void tcshim_log_cb(unsigned int level, const char * msg, void * user_data) {
         default:               tag = "info";  break;
     }
     fprintf(stderr, "[transcribe.cpp %s] %s", tag, msg);
+#endif
 }

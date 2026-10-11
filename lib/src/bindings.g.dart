@@ -2170,7 +2170,8 @@ class TranscribeBindings {
 
   /// Matches transcribe_log_callback. Pass this to transcribe_log_set with a
   /// bitmask of permitted levels cast to void * as user_data — bit N passes
-  /// level N. Messages that pass are written to stderr; the rest are dropped.
+  /// level N. Messages that pass are written to stderr, or to logcat on
+  /// Android; the rest are dropped.
   void tcshim_log_cb(
     int level,
     ffi.Pointer<ffi.Char> msg,
