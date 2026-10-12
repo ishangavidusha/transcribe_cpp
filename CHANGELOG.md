@@ -4,7 +4,7 @@ All notable changes to this package are documented here. This project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html); while the version
 is below `1.0.0`, a `0.x.0` bump may break the API and a `0.x.y` bump may not.
 
-## 0.1.1 — unreleased
+## 0.1.1 — 2026-10-12
 
 ### Fixed
 
