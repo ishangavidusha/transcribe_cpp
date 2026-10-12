@@ -1,9 +1,21 @@
 name: transcribe_cpp
-description: "Offline, on-device speech-to-text for Flutter. Dart FFI bindings to transcribe.cpp (ggml/GGUF), with Metal acceleration on iOS."
+description: "Offline, on-device speech-to-text for Flutter. Hands-free dictation with live text on iOS and Android: no network, no API keys, audio never leaves the phone."
 version: 0.0.1
 homepage: https://github.com/ishangavidusha/transcribe_cpp
 repository: https://github.com/ishangavidusha/transcribe_cpp
 issue_tracker: https://github.com/ishangavidusha/transcribe_cpp/issues
+documentation: https://ishangavidusha.github.io/transcribe_cpp/
+
+topics:
+  - speech-to-text
+  - speech-recognition
+  - transcription
+  - offline
+  - ffi
+
+screenshots:
+  - description: Live transcription running on the phone, with the sentence in progress in grey.
+    path: screenshots/demo.gif
 
 environment:
   sdk: ^3.12.2

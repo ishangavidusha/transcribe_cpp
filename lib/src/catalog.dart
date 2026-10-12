@@ -100,7 +100,7 @@ final class ModelCatalog {
   /// links, so every entry loads. Being listed is not a recommendation for a
   /// phone: whisper-large at 1 GB fits the limit, but has not been run on one
   /// through this package. parakeet-tdt_ctc-110m and moonshine-streaming-tiny
-  /// have, on an iPhone 12 Pro.
+  /// have.
   factory ModelCatalog.bundled() => ModelCatalog._(_bundled());
 
   /// The engine release the bundled entries were generated from.

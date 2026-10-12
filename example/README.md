@@ -1,41 +1,37 @@
-# transcribe_cpp_example
+# transcribe_cpp example
 
-The demo app for `transcribe_cpp` — and the measurement harness the package is
-tuned against.
+A dictation app built on `transcribe_cpp`: pick a model, press Start, and talk.
+The text appears as you speak, and each sentence settles when you pause.
 
-It runs live microphone transcription with hands-free endpointing, and prints a
-per-utterance log with input level, applied gain, output level, peak, decode
-time, real-time factor, and how much of the text was stable when it was shown:
+```bash
+flutter run --release
+```
+
+The first time you press Start it downloads the selected model
+(parakeet-tdt_ctc-110m, 90 MB, or moonshine-streaming-tiny, 50 MB), so the
+first run needs a network connection. After that it works offline.
+
+Run it in **release** on a real phone. Debug builds are much slower, and the
+simulator and emulator have no GPU for the engine.
+
+## What it shows
+
+- **Live transcription** from the microphone, with the sentence in progress in
+  grey.
+- **Presets** for when a sentence ends (`eager`, `balanced`, `patient`), and
+  automatic gain on or off.
+- **Background listening** on both platforms: a foreground service on Android
+  (`android/.../ListeningService.kt`) and the audio background mode on iOS.
+- **Compare settings**: every session is recorded, and can be replayed under
+  each preset to compare them on identical audio.
+
+It also prints a detailed log per sentence: input level, gain, decode time and
+how much of the live text was stable when it was shown.
 
 ```
 [12 ] 41.8s +3.4s  in=-38.2dB  gain=6.1x  out=-22.0dB  peak=0.58  decode=171ms  rtf=19.9x  prov=9/11 live=8/8w
       "the majority of the change will come from"
 ```
 
-It can also record a session to a WAV and replay it under a different
-configuration. That is the only honest way to A/B a setting: two live runs cover
-different audio, so comparing them means nothing.
-
-## Setup
-
-Model weights are gitignored — they are too large to commit and are not ours to
-redistribute. Fetch both from
-[huggingface.co/handy-computer](https://huggingface.co/handy-computer) into
-`assets/`, keeping the filenames exactly as `pubspec.yaml` declares them:
-
-```
-assets/parakeet-tdt_ctc-110m-Q4_K_M.gguf
-assets/moonshine-streaming-tiny-Q8_0.gguf
-```
-
-Then:
-
-```bash
-flutter run --release
-```
-
-Run it in **release**. A debug Dart VM makes the decode times and real-time
-factors meaningless, and those numbers are the reason this app exists.
-
-A physical device is required — the simulator has no usable microphone path and
-no Metal GPU to accelerate the engine.
+See the [documentation](https://ishangavidusha.github.io/transcribe_cpp/) for
+how each part works.

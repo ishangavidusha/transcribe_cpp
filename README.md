@@ -1,289 +1,118 @@
 # transcribe_cpp
 
-Offline, on-device speech-to-text for Flutter. Dart FFI bindings to
-[transcribe.cpp](https://github.com/handy-computer/transcribe.cpp) — a
-ggml/GGUF speech engine — with Metal acceleration on iOS and CPU on Android.
+[![pub package](https://img.shields.io/pub/v/transcribe_cpp.svg)](https://pub.dev/packages/transcribe_cpp)
+[![CI](https://github.com/ishangavidusha/transcribe_cpp/actions/workflows/ci.yml/badge.svg)](https://github.com/ishangavidusha/transcribe_cpp/actions/workflows/ci.yml)
+[![platforms](https://img.shields.io/badge/platforms-iOS%20%7C%20Android-4f46e5.svg)](https://ishangavidusha.github.io/transcribe_cpp/reference/platforms/)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-No network calls, no API keys, no audio leaving the device.
+**Offline speech-to-text for Flutter.** The user talks, your app gets text,
+and the audio never leaves the phone.
 
-> **Pre-release.** Not published to pub.dev, and the public API is still being
-> shaped — treat every export as unstable.
+<p align="center">
+  <img src="https://raw.githubusercontent.com/ishangavidusha/transcribe_cpp/main/screenshots/demo.gif" width="400" alt="Words appearing on screen as a speech is transcribed live on the phone">
+</p>
 
-## What is in the box
+- **Private.** Everything runs on the device: no server, no account, no API
+  key.
+- **Hands-free.** Voice detection decides when each sentence ends. No button
+  to hold.
+- **Live text.** Words appear while the user is still speaking, and settle in
+  place without flickering.
+- **Fast.** About 40 times faster than real time on a mid-range phone.
+- **Resilient.** Keeps going through calls, Siri, headphones being plugged in,
+  and the app going to the background.
+- **Your audio, too.** Already record audio yourself? Feed it in at any sample
+  rate.
 
-- **Transcription** — utterance by utterance, on a helper isolate so decoding
-  never blocks the UI.
-- **Microphone capture** over `AVAudioEngine` on iOS, surviving route changes,
-  interruptions and media-services resets, and `AudioRecord` on Android,
-  reporting when the system silences it and rebuilding after an audio-server
-  restart. Audio reaches Dart through a
-  lock-free ring read over FFI; it never crosses a method channel.
-- **Or your own audio** — any rate, channel count and sample format, pushed
-  as a stream or handed over as a clip, for apps that capture audio
-  themselves. See [Bringing your own audio](#bringing-your-own-audio).
-- **Voice activity detection** — Silero VAD, ported to C and bundled as a
-  ~1.2 MB weights asset, so endpointing costs no second inference runtime.
-- **Hands-free endpointing** — hysteresis, minimum speech duration, hangover,
-  pre/post-roll. The endpointer decides when an utterance ends; there is no
-  push-to-talk button to hold.
-- **Stable live text** — a LocalAgreement-2 stable prefix, so partial results
-  can be shown as they arrive without the tail flickering as it is revised.
+## Install
 
-## Requirements
+```bash
+flutter pub add transcribe_cpp
+```
 
-| | |
-|---|---|
-| Flutter | 3.3.0+ |
-| Dart SDK | 3.12.2+ |
-| iOS | 16.0+ (the xcframework slices refuse to link below this) |
-| Android | API 24+, arm64-v8a and x86_64. Bluetooth headset microphones are not used yet |
+Then let your app use the microphone. On **iOS**, add a reason to
+`ios/Runner/Info.plist`:
 
-Swift Package Manager is the supported iOS integration path. A CocoaPods
-podspec exists for apps that have not migrated, but it is **unverified** since
-the capture layer landed.
+```xml
+<key>NSMicrophoneUsageDescription</key>
+<string>Your speech is transcribed on this device.</string>
+```
 
-## Audio format
+On **Android**, add to `android/app/src/main/AndroidManifest.xml`:
 
-The models take **mono float32 at 16 kHz**, samples in `[-1, 1]`. The
-microphone path delivers that itself; it matters for `TranscribeSession.replay`,
-whose input must already be in that format. The engine links no resampler by
-design, so converting a recording is the caller's job.
+```xml
+<uses-permission android:name="android.permission.RECORD_AUDIO"/>
+<uses-permission android:name="android.permission.INTERNET"/>
+```
+
+## Use it
+
+```dart
+import 'package:transcribe_cpp/transcribe_cpp.dart';
+
+// Download a model once (90 MB). Later calls return it straight away.
+final models = await ModelManager.open();
+final model = await models.ensure(const ModelId('parakeet-tdt_ctc-110m-Q4_K_M'));
+
+// Load it, and listen.
+final session = await TranscribeSession.open(model);
+await session.start();
+
+// Show the text as the user speaks.
+ValueListenableBuilder(
+  valueListenable: session.text,
+  builder: (context, text, _) => Text(text.full),
+);
+
+await session.stop();
+```
+
+Already capture audio yourself? Hand it over instead of using the microphone:
+
+```dart
+await session.transcribeStream(
+  myAudio,
+  format: const AudioFormat(sampleRate: 48000),
+);
+```
 
 ## Models
 
-Model weights are **not** bundled and never will be — a useful GGUF runs from
-tens to hundreds of megabytes, which is not something an app should carry in
-its binary. Your app downloads the model it wants at first launch and points
-the package at the file.
+Models are downloaded at runtime, not bundled with your app. Two good places to
+start:
 
-Models live at
-[huggingface.co/handy-computer](https://huggingface.co/handy-computer). Which
-one to use is your decision: `parakeet-tdt_ctc-110m` measured faster and more
-accurate than `moonshine-streaming-tiny` on an iPhone 12 Pro, but the tradeoff
-between size, latency and accuracy depends on what you are building.
+| Model | Download | Word error rate* |
+|---|---|---|
+| `parakeet-tdt_ctc-110m-Q4_K_M` | 90 MB | 2.5% |
+| `moonshine-streaming-tiny-Q8_0` | 50 MB | 4.5% |
 
-`ModelManager` downloads, verifies and stores them. It never picks a model or
-starts a download on its own; your app decides which models to offer and when
-to fetch one:
+\* LibriSpeech test-clean, from the models' published benchmarks.
 
-```dart
-final models = await ModelManager.open();
+Many more are available, including other languages: every model
+[transcribe.cpp](https://github.com/handy-computer/transcribe.cpp) publishes up
+to 1 GB.
 
-// Every model the linked engine can load, with size, languages and licence.
-final choices = models.available;
+## Platforms
 
-// Download if needed, then return the verified file. Resumes a download that
-// was interrupted; callers asking for the same model share one transfer.
-final model = await models.ensure(
-  const ModelId('parakeet-tdt_ctc-110m-Q4_K_M'),
-);
-print(model.path);
-```
-
-`models.installed` is a `Live` map of each model's status for a picker, and
-`models.progressOf(id)` a `Live` progress value while one downloads. Models
-are stored outside backups — Application Support excluded from iCloud on iOS,
-the no-backup directory on Android — and a file is only installed once its size
-and SHA-256 match the catalogue.
-
-The plugin declares no permissions. On Android, an app declares
-`android.permission.RECORD_AUDIO` to listen and `android.permission.INTERNET`
-to download models, in its own manifest. Debug builds add INTERNET
-automatically, so its absence first shows up in a release build. To keep
-listening after the user leaves the app, see
-[Listening in the background](#listening-in-the-background). Model
-licences differ, and some are non-commercial: check
-`ModelDescriptor.license` before shipping one.
-
-## Transcribing
-
-```dart
-final session = await TranscribeSession.open(model);
-
-// Settled text plus the utterance still being spoken, ready for a text view.
-session.text.addListener(() => print(session.text.value.full));
-
-await session.start();   // asks for microphone permission the first time
-// ... the user speaks; the endpointer decides when each utterance ends ...
-await session.stop();    // waits for the last utterance to be decoded
-
-await session.dispose(); // releases the model
-```
-
-`start()` and `stop()` can repeat on one session without reloading the model.
-`state`, `text`, `level` and `capture` are `Live` values (a `ValueListenable`
-with a `stream` that replays the current value); `utterances`, `events` and
-`dropouts` are streams. `replay(samples)` feeds a recording through the same
-pipeline as the microphone, to compare settings on identical audio.
-
-## Bringing your own audio
-
-An app that already records audio — its own capture layer, a call stack, a
-file, audio that arrives over the network — can use the engine without the
-plugin's microphone. Nothing below touches the microphone, the audio session,
-permissions or background handling.
-
-```dart
-final session = await TranscribeSession.open(model);
-
-// Audio as it arrives: the same voice detection, endpointing and live text as
-// start(), with results on the same text, utterances and events.
-await session.transcribeStream(
-  myAudioChunks,                       // Stream of Uint8List, Int16List or Float32List
-  format: const AudioFormat(sampleRate: 48000, channels: 2),
-);
-
-// One clip, decoded as a single utterance: no segmentation, no live text.
-final transcript = await session.transcribe(
-  clip,
-  format: const AudioFormat(sampleRate: 44100),
-);
-```
-
-`AudioFormat` takes any rate from 8 to 384 kHz, any channel count, and 16-bit
-or float samples (`SampleFormat`); the session averages the channels and
-resamples to the 16 kHz the models take, off the UI isolate. Chunks may split
-a frame anywhere. `transcribeStream` completes when the stream ends, and
-`stop()` ends it early, keeping what was already pushed. Push audio at its
-natural pace for live text; pushed faster, it is transcribed as fast as the
-phone can, with fewer interim updates. `transcribe` is meant for a single
-utterance or a short clip: a long one runs into the model's own limits and
-can come back incomplete (`Transcript.wasTruncated`), so hand long audio to
-`transcribeStream`, which splits it at pauses.
-
-## Listening in the background
-
-A session listens while the app is on screen. Keeping it going after the user
-switches away is the app's decision rather than the plugin's: it needs
-configuration the plugin does not declare, and both stores ask the app to
-justify it. The example app does it on both platforms
-([`example/lib/background.dart`](example/lib/background.dart)).
-
-### iOS
-
-Add the `audio` background mode to `Info.plist`:
-
-```xml
-<key>UIBackgroundModes</key>
-<array>
-  <string>audio</string>
-</array>
-```
-
-Nothing else changes. An active audio session keeps the app running, and calls
-and Siri still arrive as interruptions the session recovers from. Start the
-session while the app is in front: iOS does not let an app start recording
-from the background. App Review expects the mode to serve a feature the user
-can see, and the system shows its microphone indicator throughout.
-
-### Android
-
-Android silences an app's recording a few seconds after it leaves the screen,
-which the session reports as `CaptureState.interrupted`, unless the app runs a
-foreground service of type `microphone`.
-
-1. Declare the service and its permissions in the app's manifest:
-
-   ```xml
-   <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
-   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
-   <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-
-   <application ...>
-       <service
-           android:name=".ListeningService"
-           android:exported="false"
-           android:foregroundServiceType="microphone"/>
-   </application>
-   ```
-
-2. Write the service. It only calls `startForeground` with
-   `ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE` and an ongoing
-   notification; it does no audio work, and the session goes on capturing
-   exactly as before.
-   [`ListeningService.kt`](example/android/app/src/main/kotlin/com/transcribecpp/transcribe_cpp_example/ListeningService.kt)
-   can be copied as it is.
-
-3. Start it right after `await session.start()` and stop it after
-   `await session.stop()`, over a method channel
-   ([`MainActivity.kt`](example/android/app/src/main/kotlin/com/transcribecpp/transcribe_cpp_example/MainActivity.kt)).
-
-The order matters. From Android 14 a microphone service can only start while
-the app is visible and already holds `RECORD_AUDIO`, which is exactly the
-state after `start()` returns; started from the background it is refused.
-From Android 13 the notification needs `POST_NOTIFICATIONS` to be shown, though
-the service runs without it. Google Play asks apps that declare a microphone
-foreground service to explain it in the Play Console.
-
-## Running the example
-
-The example app is a measurement harness as much as a demo: it prints a
-per-utterance log with levels, gain, decode time and real-time factor, and can
-replay a recorded WAV under different settings to compare them over identical
-audio.
-
-It downloads the selected model (parakeet-tdt_ctc-110m, 90 MB, or
-moonshine-streaming-tiny, 50 MB) through `ModelManager` the first time you
-press Start, so the first run needs a network connection.
-
-```bash
-cd example && flutter run --release
-```
-
-Run it in **release**. Debug builds of the Dart VM make decode times
-meaningless, and the numbers the log prints are the point.
-
-## Repository layout
-
-| Path | |
+| | |
 |---|---|
-| `lib/` | the Dart API; `lib/src/` is private and changes freely |
-| `src/` | this package's C — the FFI shim, the Silero port, the audio ring, the Android backend loader |
-| `ios/transcribe_cpp/` | the SwiftPM package: capture layer, C target, and the engine xcframework once fetched |
-| `android/` | the Gradle module: Kotlin plugin, and the engine libraries in `src/main/jniLibs` once built |
-| `assets/` | bundled Silero VAD weights |
-| `example/` | the demo and measurement harness |
-| `test/` | Dart tests, plus two standalone C tests |
-| `tool/` | the engine build and fetch, the release symbol check, the Silero weight extractor, the catalogue generator |
-| `.github/` | CI, and the release workflow that builds the engines and publishes |
+| iOS | 16.0 or later. Runs on the GPU. |
+| Android | 7.0 (API 24) or later, 64-bit. Runs on the CPU. |
 
-## Building
+## Documentation
 
-The engine binaries are not in git. The package on pub.dev carries them, so
-an app that depends on it needs nothing more; a clone of this repository, or
-an app depending on it through git, needs them put in place once:
+The full guide is at
+**[ishangavidusha.github.io/transcribe_cpp](https://ishangavidusha.github.io/transcribe_cpp/)**:
+choosing and downloading models, live text and sentences, interruptions,
+listening in the background, tuning, and how it all works.
 
-```bash
-tool/fetch_ios_engine.sh                      # upstream's xcframework, checksum-verified
-tool/build_android.sh ../transcribe.cpp       # a checkout of the engine at the pinned tag
-```
-
-The Android build needs the NDK and CMake versions the script names, from the
-Android SDK, and stops with a message if the libraries are missing. Then:
-
-```bash
-flutter analyze && flutter test
-cd example && flutter build ios --release --no-codesign
-tool/check_ios_symbols.sh example/build/ios/iphoneos/Runner.app/Runner
-cd example && flutter build apk --release
-```
-
-The release build matters. Dart resolves FFI symbols through
-`DynamicLibrary.process()`, which the linker cannot see, so it dead-strips them
-unless each exported C function is annotated — see `src/tc_export.h`. A debug
-build hides the problem; `check_ios_symbols.sh` checks every one survived.
-
-CI (`.github/workflows/ci.yml`) runs the analysis, the Dart and C tests and
-the Android build on every push, building the engine from the pinned tag. A
-`v<version>` tag runs `release.yml`, which builds both engines, verifies the
-example on each platform with them, publishes to pub.dev, and attaches the
-binaries to a GitHub release.
+The [example app](example/) is a complete app with a model picker.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
-
-This package redistributes compiled builds of transcribe.cpp (which links ggml
-and miniz) and weights derived from Silero VAD, all MIT-licensed. See
-[THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md). Model weights are not
-redistributed and carry their own licenses from their own publishers.
+MIT. The package includes builds of
+[transcribe.cpp](https://github.com/handy-computer/transcribe.cpp) and
+[ggml](https://github.com/ggml-org/ggml), and weights derived from
+[Silero VAD](https://github.com/snakers4/silero-vad), all MIT; see
+[THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md). Speech models carry their
+own licences, and some are non-commercial.
