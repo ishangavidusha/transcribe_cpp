@@ -126,6 +126,7 @@ jobs:
           name: ios-engine
           path: ios/transcribe_cpp/Frameworks/TranscribeCpp.xcframework
       - name: The tag, pubspec and changelog agree
+        id: version
         run: |
           version="$(sed -n 's/^version: //p' pubspec.yaml)"
           if [[ "$GITHUB_REF_NAME" != "v$version" ]]; then
@@ -135,6 +136,13 @@ jobs:
           if ! grep -q "^## $version\b" CHANGELOG.md; then
             echo "CHANGELOG.md has no '## $version' heading" >&2
             exit 1
+          fi
+          # A version uploaded by hand, as the first one must be, still gets
+          # its GitHub release and binaries; it is just not uploaded twice.
+          if curl -sf "https://pub.dev/api/packages/transcribe_cpp/versions/$version" > /dev/null; then
+            echo "on_pub=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "on_pub=false" >> "$GITHUB_OUTPUT"
           fi
       # Sets up the short-lived pub.dev token for this run; Flutter's pub
       # reads the same credentials.
@@ -148,7 +156,8 @@ jobs:
           flutter pub publish --dry-run | tee publish.log
           grep -q 'libtranscribe.so' publish.log
           grep -q 'CTranscribe' publish.log
-      - run: flutter pub publish --force
+      - if: steps.version.outputs.on_pub != 'true'
+        run: flutter pub publish --force
       - name: GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
