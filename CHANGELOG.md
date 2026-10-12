@@ -39,6 +39,8 @@ export should be treated as unstable.
   reporting `interrupted` while the system silences the microphone (Android
   10+) and rebuilding after an audio-server restart. Audio reaches Dart
   through a lock-free ring read over FFI, never across a method channel.
+  Starting and stopping the microphone happen off the main thread, where
+  Dart runs, so `stop()` never holds up the app's frames.
 - Hands-free endpointing (`EndpointerConfig`) with hysteresis, minimum speech
   duration, hangover and pre/post-roll, driven by a from-scratch C port of
   Silero VAD whose 16 kHz weights ship as an asset (~1.2 MB), so endpointing

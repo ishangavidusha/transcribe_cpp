@@ -14,8 +14,17 @@ import UIKit
 /// `Pointer.fromAddress`. That address is stable for the life of the capture
 /// object — across restarts, route changes and media-services resets — so the
 /// reader never re-attaches.
+///
+/// Capture calls run on a serial queue and answer on the main thread. Since
+/// Flutter 3.29 Dart runs on the main thread, and stopping waits on the audio
+/// session, so a stop made there would freeze the app's animations.
 public class TranscribeCppPlugin: NSObject, FlutterPlugin {
 
+    /// Owns `capture`: it is only read or written on this queue.
+    private let control = DispatchQueue(
+        label: "transcribe_cpp.capture",
+        qos: .userInitiated
+    )
     private var capture: AudioCapture?
     private var stateSink: FlutterEventSink?
 
@@ -53,54 +62,67 @@ public class TranscribeCppPlugin: NSObject, FlutterPlugin {
         case "start":
             let args = call.arguments as? [String: Any]
             let voiceProcessing = args?["voiceProcessing"] as? Bool ?? false
-
-            // A capture object built for a different processing mode cannot be
-            // reused: voice processing changes the input node's format, and it
-            // can only be toggled while the engine is stopped.
-            if capture == nil {
-                guard let created = AudioCapture(voiceProcessing: voiceProcessing) else {
-                    result(FlutterError(
-                        code: "ring_alloc_failed",
-                        message: "Could not allocate the capture ring buffer.",
-                        details: nil
-                    ))
-                    return
-                }
-                created.onStateChange = { [weak self] state, message in
-                    self?.emit(state: state, message: message)
-                }
-                capture = created
-            }
-
-            do {
-                try capture?.start()
-                result(["ringAddress": capture?.ringAddress ?? 0,
-                        "sampleRate": Int(AudioCapture.sampleRate)])
-            } catch {
-                result(FlutterError(
-                    code: "start_failed",
-                    message: error.localizedDescription,
-                    details: nil
-                ))
+            control.async { [self] in
+                let reply = start(voiceProcessing: voiceProcessing)
+                DispatchQueue.main.async { result(reply) }
             }
 
         case "stop":
-            capture?.stop()
-            result(nil)
+            control.async { [self] in
+                capture?.stop()
+                DispatchQueue.main.async { result(nil) }
+            }
 
         case "dispose":
-            capture?.stop()
-            capture = nil
-            result(nil)
+            control.async { [self] in
+                capture?.stop()
+                capture = nil
+                DispatchQueue.main.async { result(nil) }
+            }
 
         default:
             result(FlutterMethodNotImplemented)
         }
     }
 
+    /// On `control`. Returns the method call's reply.
+    private func start(voiceProcessing: Bool) -> Any {
+        // A capture object built for a different processing mode cannot be
+        // reused: voice processing changes the input node's format, and it
+        // can only be toggled while the engine is stopped.
+        if capture == nil {
+            guard let created = AudioCapture(
+                voiceProcessing: voiceProcessing,
+                queue: control
+            ) else {
+                return FlutterError(
+                    code: "ring_alloc_failed",
+                    message: "Could not allocate the capture ring buffer.",
+                    details: nil
+                )
+            }
+            created.onStateChange = { [weak self] state, message in
+                self?.emit(state: state, message: message)
+            }
+            capture = created
+        }
+
+        do {
+            try capture?.start()
+            return ["ringAddress": capture?.ringAddress ?? 0,
+                    "sampleRate": Int(AudioCapture.sampleRate)]
+        } catch {
+            return FlutterError(
+                code: "start_failed",
+                message: error.localizedDescription,
+                details: nil
+            )
+        }
+    }
+
     private func emit(state: CaptureState, message: String?) {
-        // Channel sends must happen on the platform thread; state changes can
-        // arrive from a notification on any queue.
+        // Channel sends must happen on the platform thread; state changes
+        // arrive on the control queue.
         DispatchQueue.main.async { [weak self] in
             var payload: [String: Any] = ["state": state.rawValue]
             if let message { payload["message"] = message }

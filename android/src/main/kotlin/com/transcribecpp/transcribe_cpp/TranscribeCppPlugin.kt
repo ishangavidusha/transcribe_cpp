@@ -3,6 +3,9 @@ package com.transcribecpp.transcribe_cpp
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.os.Handler
+import android.os.HandlerThread
+import android.os.Looper
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
@@ -16,6 +19,11 @@ import io.flutter.plugin.common.PluginRegistry
  * channels — start, stop, permission, and the capture state machine's
  * transitions. Audio goes into a C ring that a Dart isolate reads over FFI,
  * and Dart gets the ring's address to attach to.
+ *
+ * Capture calls run on a thread of their own and answer on the main thread.
+ * Since Flutter 3.29 Dart runs on the main thread too, so a stop that waited
+ * there for the capture thread to exit would freeze the app's animations
+ * for as long as it waited.
  */
 class TranscribeCppPlugin :
     FlutterPlugin,
@@ -38,11 +46,16 @@ class TranscribeCppPlugin :
     private var activity: ActivityPluginBinding? = null
     private val pendingPermission = mutableListOf<MethodChannel.Result>()
 
+    private val main = Handler(Looper.getMainLooper())
+
+    /** Owns [capture]: it is only read or written on this thread. */
+    private var control: Handler? = null
     private var capture: AudioCapture? = null
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         context = binding.applicationContext
         val messenger = binding.binaryMessenger
+        control = Handler(HandlerThread("transcribe_cpp control").apply { start() }.looper)
 
         // File system only; nothing here touches the capture object.
         storage = MethodChannel(messenger, "transcribe_cpp/storage").apply {
@@ -57,8 +70,14 @@ class TranscribeCppPlugin :
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
-        capture?.dispose()
-        capture = null
+        control?.let { handler ->
+            handler.post {
+                capture?.dispose()
+                capture = null
+                handler.looper.quitSafely()
+            }
+        }
+        control = null
         storage?.setMethodCallHandler(null)
         methods?.setMethodCallHandler(null)
         events?.setStreamHandler(null)
@@ -70,42 +89,53 @@ class TranscribeCppPlugin :
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             "requestPermission" -> requestPermission(result)
-
             "start" -> {
                 val voiceProcessing = call.argument<Boolean>("voiceProcessing") ?: false
-                val current = capture ?: AudioCapture.create(context, voiceProcessing)?.also {
-                    it.onStateChange = ::emit
-                    capture = it
-                }
-                if (current == null) {
-                    result.error("ring_alloc_failed", "Could not allocate the capture ring buffer.", null)
-                    return
-                }
-                try {
-                    current.start()
-                    result.success(
-                        mapOf(
-                            "ringAddress" to current.ringAddress,
-                            "sampleRate" to AudioCapture.SAMPLE_RATE,
-                        ),
-                    )
-                } catch (e: Exception) {
-                    result.error("start_failed", e.message, null)
-                }
+                onControl(result) { start(voiceProcessing, result) }
             }
-
-            "stop" -> {
+            "stop" -> onControl(result) {
                 capture?.stop()
-                result.success(null)
+                main.post { result.success(null) }
             }
-
-            "dispose" -> {
+            "dispose" -> onControl(result) {
                 capture?.dispose()
                 capture = null
-                result.success(null)
+                main.post { result.success(null) }
             }
-
             else -> result.notImplemented()
+        }
+    }
+
+    /** Runs [work] on the control thread, in the order calls arrived. */
+    private fun onControl(result: MethodChannel.Result, work: () -> Unit) {
+        val handler = control
+        if (handler == null || !handler.post(work)) {
+            result.error("detached", "The plugin is detached from its engine.", null)
+        }
+    }
+
+    private fun start(voiceProcessing: Boolean, result: MethodChannel.Result) {
+        // On the control thread, whose handler is the capture's.
+        val handler = Handler(Looper.myLooper()!!)
+        val current = capture ?: AudioCapture.create(context, voiceProcessing, handler)?.also {
+            it.onStateChange = ::emit
+            capture = it
+        }
+        if (current == null) {
+            main.post {
+                result.error("ring_alloc_failed", "Could not allocate the capture ring buffer.", null)
+            }
+            return
+        }
+        try {
+            current.start()
+            val reply = mapOf(
+                "ringAddress" to current.ringAddress,
+                "sampleRate" to AudioCapture.SAMPLE_RATE,
+            )
+            main.post { result.success(reply) }
+        } catch (e: Exception) {
+            main.post { result.error("start_failed", e.message, null) }
         }
     }
 
@@ -147,10 +177,11 @@ class TranscribeCppPlugin :
         return true
     }
 
+    /** Called on the control thread; the sink only accepts the main thread. */
     private fun emit(state: CaptureState, message: String?) {
         val payload = mutableMapOf<String, Any>("state" to state.code)
         if (message != null) payload["message"] = message
-        stateSink?.success(payload)
+        main.post { stateSink?.success(payload) }
     }
 
     override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {

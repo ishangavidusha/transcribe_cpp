@@ -11,7 +11,6 @@ import android.media.AudioRecordingConfiguration
 import android.media.MediaRecorder
 import android.os.Build
 import android.os.Handler
-import android.os.Looper
 import android.os.Process
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -58,10 +57,16 @@ internal enum class CaptureState(val code: Int) {
  * Audio never crosses a platform channel. A capture thread reads AudioRecord
  * into a direct buffer and hands it to the ring through JNI (capture_jni.c);
  * a Dart isolate drains the ring over FFI.
+ *
+ * Everything else — start, stop, recovery, state — runs on [handler]'s
+ * thread and only there, never the main thread. Stopping joins the capture
+ * thread, and since Flutter 3.29 Dart runs on the main thread, so a stop
+ * there would hold up the app's frames for as long as the join takes.
  */
 internal class AudioCapture private constructor(
     private val context: Context,
     private val voiceProcessing: Boolean,
+    private val handler: Handler,
     /** Address of the ring, for Dart. Stable for this object's lifetime. */
     val ringAddress: Long,
 ) {
@@ -88,25 +93,25 @@ internal class AudioCapture private constructor(
 
         /** Null only if the ring allocation fails — half a megabyte, so in
          *  practice under genuine memory pressure. */
-        fun create(context: Context, voiceProcessing: Boolean): AudioCapture? {
+        fun create(context: Context, voiceProcessing: Boolean, handler: Handler): AudioCapture? {
             val ring = nativeRingCreate(SAMPLE_RATE * RING_SECONDS)
-            return if (ring == 0L) null else AudioCapture(context, voiceProcessing, ring)
+            return if (ring == 0L) null else AudioCapture(context, voiceProcessing, handler, ring)
         }
     }
 
-    /** Called on the main thread whenever [state] changes. */
+    /** Called on [handler]'s thread whenever [state] changes. */
     var onStateChange: ((CaptureState, String?) -> Unit)? = null
 
     var state = CaptureState.IDLE
         private set
 
-    private val main = Handler(Looper.getMainLooper())
     private val audioManager = context.getSystemService(AudioManager::class.java)
 
     private var record: AudioRecord? = null
     private var isFloat = true
     private var thread: Thread? = null
     @Volatile private var running = false
+    private var callbackRegistered = false
     private var freed = false
 
     private val recordingCallback = object : AudioManager.AudioRecordingCallback() {
@@ -184,7 +189,8 @@ internal class AudioCapture private constructor(
         }
         record = made
 
-        audioManager.registerAudioRecordingCallback(recordingCallback, main)
+        audioManager.registerAudioRecordingCallback(recordingCallback, handler)
+        callbackRegistered = true
 
         running = true
         thread = Thread({ readLoop(made) }, "transcribe_cpp capture").apply { start() }
@@ -232,7 +238,7 @@ internal class AudioCapture private constructor(
             if (read < 0) {
                 if (running) {
                     val error = read
-                    main.post { onReadFailed(error) }
+                    handler.post { onReadFailed(error) }
                 }
                 return
             }
@@ -250,7 +256,12 @@ internal class AudioCapture private constructor(
 
     private fun teardown() {
         running = false
-        audioManager.unregisterAudioRecordingCallback(recordingCallback)
+        // stop() then dispose() both land here; AudioManager logs a warning
+        // for a second unregister.
+        if (callbackRegistered) {
+            audioManager.unregisterAudioRecordingCallback(recordingCallback)
+            callbackRegistered = false
+        }
         record?.let {
             // Unblocks the read the capture thread is waiting in.
             try {

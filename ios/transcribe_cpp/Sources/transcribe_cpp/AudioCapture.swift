@@ -51,6 +51,13 @@ import Foundation
 /// buffer would put ~60 messages a second on the platform thread and couple
 /// capture to UI-thread latency, which is exactly what a hands-free session
 /// cannot afford.
+///
+/// Everything but the tap runs on `queue` and only there: the caller's
+/// start and stop, and the session notifications, which iOS posts from
+/// whatever thread it likes. Not the main thread, because deactivating the
+/// session and stopping the engine block, and since Flutter 3.29 Dart runs on
+/// the main thread, so a stop there freezes the app's animations while it
+/// waits.
 public final class AudioCapture {
 
     /// The rate the engine takes. Not configurable — the models are trained
@@ -68,7 +75,7 @@ public final class AudioCapture {
         }
     }
 
-    /// Called on the main queue whenever `state` changes.
+    /// Called on `queue` whenever `state` changes.
     public var onStateChange: ((CaptureState, String?) -> Void)?
 
     /// Address of the ring, for Dart to attach to over FFI. Stable for the
@@ -77,6 +84,7 @@ public final class AudioCapture {
     public var ringAddress: UInt { UInt(bitPattern: ring) }
 
     private let ring: OpaquePointer
+    private let queue: DispatchQueue
     private let engine = AVAudioEngine()
     private var converter: AVAudioConverter?
     private var tapInstalled = false
@@ -103,8 +111,11 @@ public final class AudioCapture {
     /// Fails only if the ring allocation does — half a megabyte, so in
     /// practice only under genuine memory pressure. Failable rather than
     /// trapping: the host app deserves to handle that itself.
-    public init?(voiceProcessing: Bool = false) {
+    ///
+    /// `queue` must be serial, and every call into this object made on it.
+    public init?(voiceProcessing: Bool = false, queue: DispatchQueue) {
         self.voiceProcessing = voiceProcessing
+        self.queue = queue
         let frames = Int(AudioCapture.sampleRate) * AudioCapture.ringSeconds
         guard let ring = audio_ring_create(frames) else { return nil }
         self.ring = ring
@@ -294,7 +305,21 @@ public final class AudioCapture {
     }
 
     @objc private func handleInterruption(_ note: Notification) {
-        guard let info = note.userInfo,
+        let info = note.userInfo
+        queue.async { [weak self] in self?.interruption(info) }
+    }
+
+    @objc private func handleRouteChange(_ note: Notification) {
+        let info = note.userInfo
+        queue.async { [weak self] in self?.routeChange(info) }
+    }
+
+    @objc private func handleMediaServicesReset(_: Notification) {
+        queue.async { [weak self] in self?.mediaServicesReset() }
+    }
+
+    private func interruption(_ info: [AnyHashable: Any]?) {
+        guard let info,
               let raw = info[AVAudioSessionInterruptionTypeKey] as? UInt,
               let type = AVAudioSession.InterruptionType(rawValue: raw)
         else { return }
@@ -325,9 +350,9 @@ public final class AudioCapture {
         }
     }
 
-    @objc private func handleRouteChange(_ note: Notification) {
+    private func routeChange(_ info: [AnyHashable: Any]?) {
         guard state == .running || state == .interrupted else { return }
-        guard let info = note.userInfo,
+        guard let info,
               let raw = info[AVAudioSessionRouteChangeReasonKey] as? UInt,
               let reason = AVAudioSession.RouteChangeReason(rawValue: raw)
         else { return }
@@ -350,7 +375,7 @@ public final class AudioCapture {
         }
     }
 
-    @objc private func handleMediaServicesReset(_: Notification) {
+    private func mediaServicesReset() {
         guard state != .idle else { return }
         // Everything is invalid, including handles that still look alive.
         teardownEngine()
