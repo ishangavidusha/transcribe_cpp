@@ -246,7 +246,7 @@ final class _Job {
         // The part no longer matches what the server has. Start over once.
         await response.drain<void>();
         await store.discardPart(model.id);
-        return _fetch(0, retryFromZero: false);
+        return await _fetch(0, retryFromZero: false);
       }
       if (status != HttpStatus.ok && status != HttpStatus.partialContent) {
         await response.drain<void>().catchError((_) {});

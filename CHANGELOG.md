@@ -4,6 +4,15 @@ All notable changes to this package are documented here. This project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html); while the version
 is below `1.0.0`, a `0.x.0` bump may break the API and a `0.x.y` bump may not.
 
+## 0.1.1 — unreleased
+
+### Fixed
+
+- A download retried from the start, after the server refused to resume a
+  partial file, is now awaited inside its error handling, so a failure in
+  the retry surfaces as the download's own error. This also clears the
+  static-analysis warning on pub.dev.
+
 ## 0.1.0 — 2026-10-12
 
 First release: offline speech-to-text for Flutter on iOS and Android.
