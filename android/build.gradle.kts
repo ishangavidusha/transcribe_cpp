@@ -25,6 +25,18 @@ plugins {
     id("com.android.library")
 }
 
+// The engine is not in git. tool/build_android.sh builds it into jniLibs/, and
+// the package on pub.dev carries it. Without it the app would build and then
+// fail at the first transcription, so say so here instead.
+val engine = file("src/main/jniLibs/arm64-v8a/libtranscribe.so")
+if (!engine.exists()) {
+    throw GradleException(
+        "transcribe_cpp: the Android engine is missing (${engine.path}). " +
+            "Run tool/build_android.sh in the plugin, or depend on the " +
+            "package from pub.dev, which includes it.",
+    )
+}
+
 android {
     namespace = "com.transcribecpp.transcribe_cpp"
 

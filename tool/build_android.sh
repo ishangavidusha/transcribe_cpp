@@ -6,9 +6,11 @@
 #
 # Upstream publishes no Android binaries, so these are ours. They are built
 # from the same engine tag as the iOS xcframework and the bundled catalogue,
-# and committed, so an app build never compiles the engine: that would cost
-# minutes per ABI on every clean build, put ~250 MB of engine source in the
-# package, and require the NDK of every developer who uses it.
+# and shipped prebuilt in the pub package, so an app build never compiles the
+# engine: that would cost minutes per ABI on every clean build, put ~250 MB of
+# engine source in the package, and require the NDK of every developer who
+# uses it. They are not committed: CI builds them for every release, and a
+# git checkout needs this run once before an Android build.
 #
 # CPU code ships as several variants, and the plugin picks one at startup (see
 # src/backend_loader.c). Android's arm64 baseline is armv8.0, where ggml's
@@ -25,8 +27,9 @@
 #   tool/build_android.sh [path/to/transcribe.cpp]    (default ../transcribe.cpp)
 #
 # The checkout must be at the engine tag the catalogue names. NDK and CMake
-# come from the Android SDK (ANDROID_HOME, default ~/Library/Android/sdk);
-# the NDK is pinned so the output does not drift with whatever is installed.
+# come from the Android SDK (ANDROID_HOME, default ~/Library/Android/sdk on a
+# Mac, ~/Android/Sdk elsewhere); the NDK is pinned so the output does not
+# drift with whatever is installed.
 
 set -euo pipefail
 
@@ -40,7 +43,9 @@ X86_64_VARIANTS=(x64 haswell)
 
 here="$(cd "$(dirname "$0")/.." && pwd)"
 engine="$(cd "${1:-$here/../transcribe.cpp}" && pwd)"
-sdk="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
+default_sdk="$HOME/Library/Android/sdk"
+[[ "$(uname)" == Darwin ]] || default_sdk="$HOME/Android/Sdk"
+sdk="${ANDROID_HOME:-$default_sdk}"
 ndk="$sdk/ndk/$NDK_VERSION"
 cmake="$sdk/cmake/$CMAKE_VERSION/bin/cmake"
 ninja="$sdk/cmake/$CMAKE_VERSION/bin/ninja"

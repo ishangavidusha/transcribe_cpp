@@ -57,7 +57,10 @@ Float32List _convertAll(
     var at = 0;
     var i = 0;
     while (at < bytes.length) {
-      final size = math.min(chunkBytes[i++ % chunkBytes.length], bytes.length - at);
+      final size = math.min(
+        chunkBytes[i++ % chunkBytes.length],
+        bytes.length - at,
+      );
       out.addAll(converter.add(Uint8List.sublistView(bytes, at, at + size)));
       at += size;
     }
@@ -134,7 +137,10 @@ void main() {
       // 12 kHz at 48 kHz would alias to 4 kHz, the middle of speech.
       final input = _sine(48000, 12000, 1);
       final out = _convertAll(
-        const AudioFormat(sampleRate: 48000, sampleFormat: SampleFormat.float32),
+        const AudioFormat(
+          sampleRate: 48000,
+          sampleFormat: SampleFormat.float32,
+        ),
         input,
       );
       final rejection = 20 * math.log(_rms(out) / _rms(input)) / math.ln10;
@@ -149,7 +155,11 @@ void main() {
         sampleFormat: SampleFormat.float32,
       );
       final whole = _convertAll(format, input);
-      final chunked = _convertAll(format, input, chunkBytes: [4, 1764, 12, 400]);
+      final chunked = _convertAll(
+        format,
+        input,
+        chunkBytes: [4, 1764, 12, 400],
+      );
       expect(chunked, whole);
     });
 
@@ -158,7 +168,10 @@ void main() {
       // kernel later.
       final input = Float32List(48000)..[24000] = 1;
       final out = _convertAll(
-        const AudioFormat(sampleRate: 48000, sampleFormat: SampleFormat.float32),
+        const AudioFormat(
+          sampleRate: 48000,
+          sampleFormat: SampleFormat.float32,
+        ),
         input,
       );
       var peak = 0;

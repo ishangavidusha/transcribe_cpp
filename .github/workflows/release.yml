@@ -1,0 +1,161 @@
+# Publishes a release: builds the engine binaries, which are not in git,
+# verifies the package on both platforms with them in place, publishes to
+# pub.dev with them inside, and attaches them to a GitHub release.
+#
+# Triggered by pushing a tag v<version>, cut from the commit that sets that
+# version in pubspec.yaml and CHANGELOG.md.
+#
+# One-time setup, which only the package owner can do:
+#   1. The first version must be published by hand: pub.dev only allows
+#      automated publishing for a package that already exists. Run
+#      tool/build_android.sh and tool/fetch_ios_engine.sh, then
+#      `flutter pub publish`.
+#   2. On pub.dev, the package's Admin tab, enable publishing from GitHub
+#      Actions for this repository with the tag pattern v{{version}}, and
+#      require the GitHub environment `pub.dev`.
+#   3. In this repository's settings, create that environment, ideally with a
+#      required reviewer, so a pushed tag cannot publish on its own.
+name: Release
+
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+*']
+
+permissions:
+  contents: read
+
+env:
+  FLUTTER_VERSION: 3.44.9
+
+jobs:
+  android-engine:
+    name: Build the Android engine
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: engine
+        run: |
+          for v in ENGINE_REF NDK_VERSION CMAKE_VERSION; do
+            echo "$v=$(sed -n "s/^$v=\([^ ]*\).*/\1/p" tool/build_android.sh)" >> "$GITHUB_OUTPUT"
+          done
+      - uses: actions/checkout@v4
+        with:
+          repository: handy-computer/transcribe.cpp
+          ref: ${{ steps.engine.outputs.ENGINE_REF }}
+          path: engine
+      # From scratch, never from CI's cache: what ships is built here.
+      - run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "ndk;${{ steps.engine.outputs.NDK_VERSION }}" \
+            "cmake;${{ steps.engine.outputs.CMAKE_VERSION }}" > /dev/null
+          tool/build_android.sh engine
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-engine
+          path: android/src/main/jniLibs/*/
+          if-no-files-found: error
+
+  ios-engine:
+    name: Fetch the iOS engine
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: tool/fetch_ios_engine.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-engine
+          path: ios/transcribe_cpp/Frameworks/TranscribeCpp.xcframework/
+          if-no-files-found: error
+
+  verify-android:
+    name: Verify on Android
+    needs: android-engine
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: android-engine
+          path: android/src/main/jniLibs
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+      - run: flutter analyze && flutter test
+      - working-directory: example
+        run: flutter build apk --release
+
+  verify-ios:
+    name: Verify on iOS
+    needs: ios-engine
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: ios-engine
+          path: ios/transcribe_cpp/Frameworks/TranscribeCpp.xcframework
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+      - working-directory: example
+        run: flutter build ios --release --no-codesign
+      - run: tool/check_ios_symbols.sh example/build/ios/iphoneos/Runner.app/Runner
+
+  publish:
+    name: Publish
+    needs: [verify-android, verify-ios]
+    runs-on: ubuntu-latest
+    environment: pub.dev
+    permissions:
+      contents: write # the GitHub release
+      id-token: write # pub.dev's OIDC login
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: android-engine
+          path: android/src/main/jniLibs
+      - uses: actions/download-artifact@v4
+        with:
+          name: ios-engine
+          path: ios/transcribe_cpp/Frameworks/TranscribeCpp.xcframework
+      - name: The tag, pubspec and changelog agree
+        run: |
+          version="$(sed -n 's/^version: //p' pubspec.yaml)"
+          if [[ "$GITHUB_REF_NAME" != "v$version" ]]; then
+            echo "tag $GITHUB_REF_NAME does not match pubspec version $version" >&2
+            exit 1
+          fi
+          if ! grep -q "^## $version\b" CHANGELOG.md; then
+            echo "CHANGELOG.md has no '## $version' heading" >&2
+            exit 1
+          fi
+      # Sets up the short-lived pub.dev token for this run; Flutter's pub
+      # reads the same credentials.
+      - uses: dart-lang/setup-dart@v1
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+      - name: The package carries both engines
+        run: |
+          flutter pub publish --dry-run | tee publish.log
+          grep -q 'libtranscribe.so' publish.log
+          grep -q 'CTranscribe' publish.log
+      - run: flutter pub publish --force
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          (cd android/src/main && zip -qr "$OLDPWD/transcribe_cpp-android-jniLibs.zip" jniLibs -x 'jniLibs/.*')
+          (cd ios/transcribe_cpp/Frameworks && zip -qry "$OLDPWD/TranscribeCpp-ios.xcframework.zip" TranscribeCpp.xcframework)
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --notes "See [CHANGELOG.md]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/$GITHUB_REF_NAME/CHANGELOG.md). The engine binaries the package ships are attached." \
+            transcribe_cpp-android-jniLibs.zip TranscribeCpp-ios.xcframework.zip

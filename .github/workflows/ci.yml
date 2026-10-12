@@ -1,0 +1,129 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  FLUTTER_VERSION: 3.44.9
+
+jobs:
+  dart:
+    name: Analyze and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: dart format --output=none --set-exit-if-changed lib test example/lib
+      - run: flutter analyze
+      - run: flutter test
+      - name: Example
+        working-directory: example
+        run: |
+          flutter analyze
+          flutter test
+
+  native:
+    name: C tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: engine
+        run: echo "ref=$(sed -n 's/^ENGINE_REF=//p' tool/build_android.sh)" >> "$GITHUB_OUTPUT"
+      # Only for samples/jfk.wav, the audio the VAD reference was made from.
+      - uses: actions/checkout@v4
+        with:
+          repository: handy-computer/transcribe.cpp
+          ref: ${{ steps.engine.outputs.ref }}
+          path: engine
+          sparse-checkout: samples
+      - name: Ring buffer, under ThreadSanitizer too
+        run: |
+          clang -std=c11 -O2 -I src test/audio_ring_test.c src/audio_ring.c -lpthread -o ring
+          ./ring
+          # TSan's shadow memory does not fit the runner's default address
+          # randomisation, and it aborts before main without this.
+          sudo sysctl -w vm.mmap_rnd_bits=28
+          clang -std=c11 -g -fsanitize=thread -I src test/audio_ring_test.c src/audio_ring.c -lpthread -o ring_tsan
+          ./ring_tsan
+      - name: Silero VAD against onnxruntime's output
+        run: |
+          clang -std=c11 -O2 -I src test/silero_vad_test.c src/silero_vad.c -lm -o silero
+          ./silero assets/silero_vad.bin engine/samples/jfk.wav test/fixtures/silero_jfk_reference.bin
+
+  android:
+    name: Android
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: engine
+        run: |
+          for v in ENGINE_REF NDK_VERSION CMAKE_VERSION; do
+            echo "$v=$(sed -n "s/^$v=\([^ ]*\).*/\1/p" tool/build_android.sh)" >> "$GITHUB_OUTPUT"
+          done
+      # The engine only changes with the build script, which pins its tag,
+      # NDK and CMake; anything else reuses the last build.
+      - id: cache
+        uses: actions/cache@v4
+        with:
+          path: android/src/main/jniLibs/*/
+          key: android-engine-${{ hashFiles('tool/build_android.sh') }}
+      - if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: handy-computer/transcribe.cpp
+          ref: ${{ steps.engine.outputs.ENGINE_REF }}
+          path: engine
+      - if: steps.cache.outputs.cache-hit != 'true'
+        name: Build the engine
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "ndk;${{ steps.engine.outputs.NDK_VERSION }}" \
+            "cmake;${{ steps.engine.outputs.CMAKE_VERSION }}" > /dev/null
+          tool/build_android.sh engine
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Example release build
+        working-directory: example
+        run: flutter build apk --release
+
+  # macOS minutes cost ten times Linux ones on a private repository, so this
+  # runs on demand, and on every release (release.yml). Once the repository
+  # is public they are free, and this should run on every push.
+  ios:
+    name: iOS
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: tool/fetch_ios_engine.sh
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Example release build
+        working-directory: example
+        run: flutter build ios --release --no-codesign
+      - name: Every exported C function survived dead-stripping
+        run: tool/check_ios_symbols.sh example/build/ios/iphoneos/Runner.app/Runner

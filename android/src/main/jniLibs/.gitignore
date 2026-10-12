@@ -1,0 +1,6 @@
+# Engine binaries: built or fetched by tool/ (build_android.sh,
+# fetch_ios_engine.sh) and by CI, never committed. The .pubignore beside this
+# file replaces it for `pub publish`, so the published package carries them.
+*
+!.gitignore
+!.pubignore

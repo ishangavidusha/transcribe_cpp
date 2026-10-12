@@ -239,25 +239,45 @@ meaningless, and the numbers the log prints are the point.
 |---|---|
 | `lib/` | the Dart API; `lib/src/` is private and changes freely |
 | `src/` | this package's C — the FFI shim, the Silero port, the audio ring, the Android backend loader |
-| `ios/transcribe_cpp/` | the SwiftPM package: capture layer, C target, engine xcframework |
-| `android/` | the Gradle module: Kotlin plugin, prebuilt engine libraries in `src/main/jniLibs` |
+| `ios/transcribe_cpp/` | the SwiftPM package: capture layer, C target, and the engine xcframework once fetched |
+| `android/` | the Gradle module: Kotlin plugin, and the engine libraries in `src/main/jniLibs` once built |
 | `assets/` | bundled Silero VAD weights |
 | `example/` | the demo and measurement harness |
 | `test/` | Dart tests, plus two standalone C tests |
-| `tool/` | the Silero weight extractor, the catalogue generator, the Android engine build |
+| `tool/` | the engine build and fetch, the release symbol check, the Silero weight extractor, the catalogue generator |
+| `.github/` | CI, and the release workflow that builds the engines and publishes |
 
 ## Building
+
+The engine binaries are not in git. The package on pub.dev carries them, so
+an app that depends on it needs nothing more; a clone of this repository, or
+an app depending on it through git, needs them put in place once:
+
+```bash
+tool/fetch_ios_engine.sh                      # upstream's xcframework, checksum-verified
+tool/build_android.sh ../transcribe.cpp       # a checkout of the engine at the pinned tag
+```
+
+The Android build needs the NDK and CMake versions the script names, from the
+Android SDK, and stops with a message if the libraries are missing. Then:
 
 ```bash
 flutter analyze && flutter test
 cd example && flutter build ios --release --no-codesign
+tool/check_ios_symbols.sh example/build/ios/iphoneos/Runner.app/Runner
 cd example && flutter build apk --release
 ```
 
 The release build matters. Dart resolves FFI symbols through
 `DynamicLibrary.process()`, which the linker cannot see, so it dead-strips them
 unless each exported C function is annotated — see `src/tc_export.h`. A debug
-build hides the problem.
+build hides the problem; `check_ios_symbols.sh` checks every one survived.
+
+CI (`.github/workflows/ci.yml`) runs the analysis, the Dart and C tests and
+the Android build on every push, building the engine from the pinned tag. A
+`v<version>` tag runs `release.yml`, which builds both engines, verifies the
+example on each platform with them, publishes to pub.dev, and attaches the
+binaries to a GitHub release.
 
 ## License
 

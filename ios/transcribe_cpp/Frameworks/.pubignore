@@ -1,0 +1,2 @@
+# Present so that pub ignores the .gitignore beside it: the engine binaries
+# here are kept out of git but must be in the published package.
