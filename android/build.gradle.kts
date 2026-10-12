@@ -54,6 +54,10 @@ android {
     defaultConfig {
         // Matches ANDROID_PLATFORM in tool/build_android.sh.
         minSdk = 24
+
+        // Merged into the app's shrinker configuration, whatever the app's
+        // own rules are.
+        consumerProguardFiles("consumer-rules.pro")
     }
 }
 
