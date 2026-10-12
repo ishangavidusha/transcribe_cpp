@@ -107,12 +107,8 @@ jobs:
         working-directory: example
         run: flutter build apk --release
 
-  # macOS minutes cost ten times Linux ones on a private repository, so this
-  # runs on demand, and on every release (release.yml). Once the repository
-  # is public they are free, and this should run on every push.
   ios:
     name: iOS
-    if: github.event_name == 'workflow_dispatch'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
