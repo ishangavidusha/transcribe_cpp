@@ -36,8 +36,10 @@ export should be treated as unstable.
   no-backup directory.
 - Microphone capture on iOS over `AVAudioEngine`, surviving route changes,
   interruptions and media-services resets, and on Android over `AudioRecord`,
-  reporting `interrupted` while the system silences the microphone (Android
-  10+) and rebuilding after an audio-server restart. Audio reaches Dart
+  reporting `interrupted` while the system silences the microphone and
+  rebuilding after an audio-server restart. Before Android 10, which has no
+  silencing callback, a second of exact digital silence is reported as an
+  interruption, naming a call when one is active. Audio reaches Dart
   through a lock-free ring read over FFI, never across a method channel.
   Starting and stopping the microphone happen off the main thread, where
   Dart runs, so `stop()` never holds up the app's frames.

@@ -44,7 +44,11 @@ internal enum class CaptureState(val code: Int) {
  *     service, the privacy toggle: in each case the recording keeps running
  *     and delivers zeros. On Android 10+ the recording callback says so, and
  *     that is reported as `INTERRUPTED`, and `RUNNING` again when it lifts.
- *     Without it, a call mid-dictation looks like the user went quiet.
+ *     Before 10 there is no such callback, so the zeros themselves are the
+ *     signal: a second of exact digital silence, which a live microphone
+ *     does not produce, is reported the same way, and the audio mode tells
+ *     a call apart from another app. Without either, a call mid-dictation
+ *     looks like the user went quiet.
  *   * **A dead stream.** If the audio server restarts, reads fail with
  *     ERROR_DEAD_OBJECT and the recording has to be built again. That is
  *     `RECOVERING`, like a media-services reset on iOS.
@@ -81,6 +85,18 @@ internal class AudioCapture private constructor(
         /** 20 ms per read: short enough that the endpointer sees audio about
          *  as soon as iOS delivers it, long enough not to spin. */
         private const val CHUNK_FRAMES = SAMPLE_RATE / 50
+
+        /** Before Android 10, this much exact digital silence is taken as the
+         *  system silencing the recording. A live microphone's noise floor
+         *  keeps it off zero: over 750 s of real iPhone capture (quietest
+         *  second -61 dBFS) the longest run of exact zeros was 44 ms, at a
+         *  route change. A silenced Android recording is 100% zeros. A
+         *  second is over twenty times the longest natural run and still
+         *  reports a call within a second of it starting. */
+        private const val SILENCED_FRAMES = SAMPLE_RATE
+
+        /** Android 10 added the recording callback that reports silencing. */
+        private val SILENCE_CALLBACK = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
 
         init {
             System.loadLibrary("transcribe_cpp")
@@ -231,6 +247,8 @@ internal class AudioCapture private constructor(
         val bytesPerFrame = if (isFloat) 4 else 2
         val buffer = ByteBuffer.allocateDirect(CHUNK_FRAMES * bytesPerFrame)
             .order(ByteOrder.nativeOrder())
+        var zeroFrames = 0
+        var silent = false
 
         while (running) {
             buffer.clear()
@@ -244,6 +262,16 @@ internal class AudioCapture private constructor(
             }
             val frames = read / bytesPerFrame
             if (frames == 0) continue
+            if (!SILENCE_CALLBACK) {
+                zeroFrames = if (isAllZero(buffer, frames)) zeroFrames + frames else 0
+                if (!silent && zeroFrames >= SILENCED_FRAMES) {
+                    silent = true
+                    handler.post { onDigitalSilence(true) }
+                } else if (silent && zeroFrames == 0) {
+                    silent = false
+                    handler.post { onDigitalSilence(false) }
+                }
+            }
             // A rejected write is recorded as dropped by the native side,
             // which the reader sees and resets across.
             if (isFloat) {
@@ -252,6 +280,15 @@ internal class AudioCapture private constructor(
                 nativeWritePcm16(ringAddress, buffer, frames)
             }
         }
+    }
+
+    private fun isAllZero(buffer: ByteBuffer, frames: Int): Boolean {
+        if (isFloat) {
+            for (i in 0 until frames) if (buffer.getFloat(i * 4) != 0f) return false
+        } else {
+            for (i in 0 until frames) if (buffer.getShort(i * 2).toInt() != 0) return false
+        }
+        return true
     }
 
     private fun teardown() {
@@ -292,6 +329,21 @@ internal class AudioCapture private constructor(
         } catch (e: Exception) {
             teardown()
             setState(CaptureState.FAILED, "$reason: ${e.message}")
+        }
+    }
+
+    /** Before Android 10: silencing inferred from the audio, on [handler]. */
+    private fun onDigitalSilence(silent: Boolean) {
+        when {
+            silent && state == CaptureState.RUNNING -> {
+                val reason = when (audioManager.mode) {
+                    AudioManager.MODE_IN_CALL -> "a phone call is using the microphone"
+                    AudioManager.MODE_IN_COMMUNICATION -> "a call is using the microphone"
+                    else -> "the microphone went silent; another app may be using it"
+                }
+                setState(CaptureState.INTERRUPTED, reason)
+            }
+            !silent && state == CaptureState.INTERRUPTED -> setState(CaptureState.RUNNING)
         }
     }
 

@@ -20,7 +20,8 @@ enum CaptureState {
   /// this is also reported when the app goes to the background without a
   /// microphone foreground service, or the user turns on the microphone
   /// privacy toggle. Android reports silencing from version 10; before that,
-  /// it looks like the user went quiet.
+  /// it is inferred from a second of exact digital silence, which a live
+  /// microphone does not produce, so it arrives about a second late.
   interrupted,
 
   /// Rebuilding after an interruption, a route change, a media-services reset
