@@ -18,6 +18,9 @@ No network calls, no API keys, no audio leaving the device.
   reporting when the system silences it and rebuilding after an audio-server
   restart. Audio reaches Dart through a
   lock-free ring read over FFI; it never crosses a method channel.
+- **Or your own audio** — any rate, channel count and sample format, pushed
+  as a stream or handed over as a clip, for apps that capture audio
+  themselves. See [Bringing your own audio](#bringing-your-own-audio).
 - **Voice activity detection** — Silero VAD, ported to C and bundled as a
   ~1.2 MB weights asset, so endpointing costs no second inference runtime.
 - **Hands-free endpointing** — hysteresis, minimum speech duration, hangover,
@@ -112,6 +115,41 @@ await session.dispose(); // releases the model
 with a `stream` that replays the current value); `utterances`, `events` and
 `dropouts` are streams. `replay(samples)` feeds a recording through the same
 pipeline as the microphone, to compare settings on identical audio.
+
+## Bringing your own audio
+
+An app that already records audio — its own capture layer, a call stack, a
+file, audio that arrives over the network — can use the engine without the
+plugin's microphone. Nothing below touches the microphone, the audio session,
+permissions or background handling.
+
+```dart
+final session = await TranscribeSession.open(model);
+
+// Audio as it arrives: the same voice detection, endpointing and live text as
+// start(), with results on the same text, utterances and events.
+await session.transcribeStream(
+  myAudioChunks,                       // Stream of Uint8List, Int16List or Float32List
+  format: const AudioFormat(sampleRate: 48000, channels: 2),
+);
+
+// One clip, decoded as a single utterance: no segmentation, no live text.
+final transcript = await session.transcribe(
+  clip,
+  format: const AudioFormat(sampleRate: 44100),
+);
+```
+
+`AudioFormat` takes any rate from 8 to 384 kHz, any channel count, and 16-bit
+or float samples (`SampleFormat`); the session averages the channels and
+resamples to the 16 kHz the models take, off the UI isolate. Chunks may split
+a frame anywhere. `transcribeStream` completes when the stream ends, and
+`stop()` ends it early, keeping what was already pushed. Push audio at its
+natural pace for live text; pushed faster, it is transcribed as fast as the
+phone can, with fewer interim updates. `transcribe` is meant for a single
+utterance or a short clip: a long one runs into the model's own limits and
+can come back incomplete (`Transcript.wasTruncated`), so hand long audio to
+`transcribeStream`, which splits it at pauses.
 
 ## Listening in the background
 

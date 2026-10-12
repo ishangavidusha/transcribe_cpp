@@ -17,6 +17,13 @@ export should be treated as unstable.
   `Live` values; `utterances`, `events` and `dropouts` are streams that last
   the whole session. `replay()` runs a recording through the same pipeline,
   so settings can be compared over identical audio.
+- Transcription of the app's own audio, for apps with their own capture:
+  `TranscribeSession.transcribeStream()` runs a stream of chunks through the
+  same endpointing and live text as the microphone, and
+  `TranscribeSession.transcribe()` decodes a single clip. `AudioFormat`
+  describes the input — any rate from 8 to 384 kHz, any channel count,
+  16-bit or float — and the session converts it to 16 kHz mono with a
+  windowed-sinc resampler, flat to 0.01 dB through 4 kHz.
 - `ModelManager`, which downloads catalogue models on request, resuming an
   interrupted download, sharing one transfer between callers and installing a
   file only once its size and SHA-256 match. `installed` is a `Live` map of

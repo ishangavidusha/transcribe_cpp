@@ -3,6 +3,7 @@ import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'activity.dart' as activity;
+import 'audio_format.dart';
 import 'capture.dart';
 import 'endpointer.dart';
 import 'live.dart';
@@ -23,13 +24,15 @@ enum SessionState {
   /// prompt can hold a session here for as long as the user takes.
   starting,
 
-  /// The microphone is on and speech is being transcribed.
+  /// Live audio is being transcribed: the microphone after
+  /// [TranscribeSession.start], or the app's own audio after
+  /// [TranscribeSession.transcribeStream].
   listening,
 
   /// A recording is being fed through the pipeline by [TranscribeSession.replay].
   replaying,
 
-  /// The microphone is off and the last utterances are still decoding.
+  /// The audio has stopped and the last utterances are still decoding.
   finishing,
 }
 
@@ -77,6 +80,12 @@ final class LiveText {
 /// Opening loads the model, which is the expensive part; [start] and [stop]
 /// can then run any number of times, and the streams and [Live] values last
 /// for the whole session, so nothing needs re-subscribing between runs.
+///
+/// The microphone is optional. An app with its own audio stack can hand its
+/// audio to [transcribeStream], which runs the same voice detection,
+/// endpointing and live text over it, or a clip to [transcribe], which just
+/// decodes it. Neither touches the capture layer, the audio session or
+/// microphone permission.
 ///
 /// Three isolates sit behind it. The audio thread writes a lock-free ring; a
 /// reader isolate drains it every 16 ms and runs the VAD and endpointer, off
@@ -262,6 +271,81 @@ final class TranscribeSession {
     await _finish(_begin(source, stableAgreement));
   }
 
+  /// Transcribes the app's own audio as it arrives, through the same voice
+  /// detection, endpointing and live text as the microphone, and completes
+  /// once [audio] ends and every utterance in it is delivered.
+  ///
+  /// For an app that already captures audio itself: nothing here touches the
+  /// microphone, the audio session or permissions. Results arrive exactly as
+  /// they do from [start] — [text], [utterances], [events] and [level] — and
+  /// [state] is [SessionState.listening] until the stream ends. [stop] ends
+  /// it early, transcribing what was pushed before it.
+  ///
+  /// [audio] is chunks laid out as [format] says, any rate and channel
+  /// count; it is converted to the engine's 16 kHz mono off the UI isolate.
+  /// A chunk may be an `Int16List`, a `Float32List` or the raw bytes, and may
+  /// split a frame anywhere. Push it at its natural pace for live text, which
+  /// paces itself by the audio's clock, not the wall's. An error on [audio]
+  /// ends the run, and is rethrown once what came before it is delivered.
+  ///
+  /// The settings are [start]'s.
+  Future<void> transcribeStream(
+    Stream<TypedData> audio, {
+    required AudioFormat format,
+    EndpointerConfig endpointer = const EndpointerConfig(),
+    NormalizerConfig? normalizer = const NormalizerConfig(),
+    Duration provisionalInterval = const Duration(milliseconds: 350),
+    int stableAgreement = 2,
+  }) async {
+    _checkIdle();
+    AudioConverter.check(format);
+    _state.value = SessionState.listening;
+    _text.value = const LiveText();
+    final settings = ReaderSettings(
+      weights: _weights,
+      endpointer: endpointer,
+      normalizer: normalizer,
+      provisionalInterval: provisionalInterval,
+      voiceProcessing: false,
+    );
+    final ReaderSource source;
+    try {
+      source = await _sources.pushed(settings, audio, format);
+    } catch (_) {
+      _state.value = SessionState.idle;
+      rethrow;
+    }
+    await _finish(_begin(source, stableAgreement));
+    final error = source.error;
+    if (error != null) Error.throwWithStackTrace(error.$1, error.$2);
+  }
+
+  /// Decodes one clip of the app's own audio, as a single utterance.
+  ///
+  /// The plain engine call: no voice detection, no endpointing, no live text,
+  /// and nothing touching the microphone. [audio] is laid out as [format]
+  /// says, any rate and channel count, and converted to 16 kHz mono off the
+  /// UI isolate. Mono float32 at 16 kHz ([AudioFormat.engine]) in a
+  /// `Float32List` goes to the engine as it is.
+  ///
+  /// Meant for an utterance or a short recording. A clip is decoded in one
+  /// pass, so a long one runs into the model's own limits and can come back
+  /// incomplete ([Transcript.wasTruncated]); hand long audio to
+  /// [transcribeStream], which splits it at pauses.
+  ///
+  /// Can be called while a run is going; decodes take turns on the model.
+  Future<Transcript> transcribe(
+    TypedData audio, {
+    required AudioFormat format,
+  }) async {
+    if (_disposed) throw StateError('TranscribeSession has been disposed');
+    AudioConverter.check(format);
+    final pcm = format == AudioFormat.engine && audio is Float32List
+        ? audio
+        : await Isolate.run(() => AudioConverter.convertAll(audio, format));
+    return _decoder.transcribe(pcm);
+  }
+
   /// Stops anything running and releases the model. The [Live] values keep
   /// their last state; the streams close.
   Future<void> dispose() async {
@@ -424,6 +508,9 @@ abstract interface class ReaderSource {
   /// Asks the reader to finish: flush what it holds, then send `'done'`.
   void stop();
 
+  /// What ended the run early, if its input failed; read after `'done'`.
+  (Object, StackTrace)? get error;
+
   /// Releases everything, once `'done'` has arrived.
   Future<void> close();
 }
@@ -431,7 +518,11 @@ abstract interface class ReaderSource {
 /// How a session gets its readers. Swapped in tests, which have neither a
 /// microphone nor the native VAD.
 final class SessionSources {
-  const SessionSources({required this.live, required this.replay});
+  const SessionSources({
+    required this.live,
+    required this.replay,
+    this.pushed = _startPushed,
+  });
 
   final Future<ReaderSource> Function(ReaderSettings settings) live;
   final Future<ReaderSource> Function(
@@ -439,6 +530,12 @@ final class SessionSources {
     Float32List audio,
   )
   replay;
+  final Future<ReaderSource> Function(
+    ReaderSettings settings,
+    Stream<TypedData> audio,
+    AudioFormat format,
+  )
+  pushed;
 
   static const platform = SessionSources(
     live: _startCapture,
@@ -489,6 +586,7 @@ final class _IsolateSource implements ReaderSource {
     ReaderSettings s, {
     int ringAddress = 0,
     bool replay = false,
+    AudioFormat? pushed,
     String debugName = 'transcribe_cpp reader',
   }) async {
     final events = ReceivePort();
@@ -504,6 +602,7 @@ final class _IsolateSource implements ReaderSource {
         normalizer: s.normalizer,
         provisionalInterval: s.provisionalInterval,
         replay: replay,
+        pushed: pushed,
         recordTo: s.recordTo,
       ),
       debugName: debugName,
@@ -526,6 +625,9 @@ final class _IsolateSource implements ReaderSource {
 
   @override
   void stop() => _commands.send('stop');
+
+  @override
+  (Object, StackTrace)? get error => null;
 
   @override
   Future<void> close() async {
@@ -604,6 +706,9 @@ final class _CaptureSource implements ReaderSource {
   Stream<CaptureStatus> get captureStates => _states.stream;
 
   @override
+  (Object, StackTrace)? get error => null;
+
+  @override
   void stop() {
     _inner.stop();
     unawaited(MicrophoneCapture.stop());
@@ -628,4 +733,60 @@ Future<ReaderSource> _startReplay(ReaderSettings s, Float32List audio) async {
   // anything, and a ReceivePort holds messages until it is listened to.
   source.send(audio);
   return source;
+}
+
+Future<ReaderSource> _startPushed(
+  ReaderSettings s,
+  Stream<TypedData> audio,
+  AudioFormat format,
+) async {
+  final reader = await _IsolateSource.spawn(
+    s,
+    pushed: format,
+    debugName: 'transcribe_cpp pushed reader',
+  );
+  return _PushedSource(reader, audio);
+}
+
+/// The app's own audio, forwarded chunk by chunk to a reader that converts
+/// and segments it. The end of the stream is the stop.
+final class _PushedSource implements ReaderSource {
+  _PushedSource(this._inner, Stream<TypedData> audio) {
+    _subscription = audio.listen(
+      _inner.send,
+      onError: (Object e, StackTrace st) {
+        _error ??= (e, st);
+        stop();
+      },
+      onDone: stop,
+      cancelOnError: true,
+    );
+  }
+
+  final _IsolateSource _inner;
+  late final StreamSubscription<TypedData> _subscription;
+  (Object, StackTrace)? _error;
+  bool _stopped = false;
+
+  @override
+  Stream<Object?> get messages => _inner.messages;
+
+  @override
+  Stream<CaptureStatus> get captureStates => const Stream.empty();
+
+  @override
+  (Object, StackTrace)? get error => _error;
+
+  @override
+  void stop() {
+    if (_stopped) return;
+    _stopped = true;
+    // Audio already pushed is still in the reader's queue, ahead of the stop,
+    // and is transcribed; only what the app has not pushed yet is dropped.
+    unawaited(_subscription.cancel());
+    _inner.stop();
+  }
+
+  @override
+  Future<void> close() => _inner.close();
 }

@@ -6,11 +6,15 @@
 /// app asks for one; [TranscribeSession] loads it and turns the microphone
 /// into text, endpointing speech hands-free.
 ///
-/// The microphone path converts audio itself. Audio handed to
-/// [TranscribeSession.replay] must already be mono float32 at
-/// [TranscribeSession.sampleRate] (16 kHz), with samples in `[-1, 1]`.
+/// An app with its own audio stack can skip the microphone:
+/// [TranscribeSession.transcribeStream] runs the same endpointing and live
+/// text over audio the app pushes, and [TranscribeSession.transcribe] decodes
+/// a single clip. Both take any rate and channel count ([AudioFormat]).
+/// Audio handed to [TranscribeSession.replay] must already be mono float32
+/// at [TranscribeSession.sampleRate] (16 kHz), with samples in `[-1, 1]`.
 library;
 
+export 'src/audio_format.dart' show AudioFormat, SampleFormat;
 export 'src/capture.dart' show CaptureState, CaptureStatus;
 export 'src/catalog.dart' show ModelCatalog, ModelDescriptor, ModelId;
 export 'src/endpointer.dart'

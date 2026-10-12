@@ -3,6 +3,7 @@ import 'dart:isolate';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'audio_format.dart';
 import 'endpointer.dart';
 import 'normalizer.dart';
 import 'ring.dart';
@@ -101,6 +102,7 @@ class ReaderBoot {
     required this.provisionalInterval,
     this.ringAddress = 0,
     this.replay = false,
+    this.pushed,
     this.recordTo,
   });
 
@@ -116,6 +118,10 @@ class ReaderBoot {
 
   /// Replay mode: audio arrives over the command port instead of a ring.
   final bool replay;
+
+  /// Pushed mode: the app's own audio arrives over the command port in
+  /// chunks, laid out like this, until a stop.
+  final AudioFormat? pushed;
 
   /// Live capture: where to write the raw audio, or null not to.
   final String? recordTo;
@@ -239,6 +245,8 @@ void readerMain(ReaderBoot boot) {
 
   if (boot.replay) {
     replayLoop(boot, vad, segmenter);
+  } else if (boot.pushed != null) {
+    pushedLoop(boot, boot.pushed!, vad, segmenter);
   } else {
     captureLoop(boot, vad, segmenter);
   }
@@ -296,6 +304,44 @@ Future<void> replayLoop(
   vad.dispose();
   commands.close();
   boot.events.send('done');
+}
+
+/// Converts the app's audio as it arrives and feeds it through.
+///
+/// Chunks are fed in the order they were pushed, at whatever pace the app
+/// pushes them. Live text paces itself by the audio's own clock, so audio
+/// pushed in real time gets live text as the microphone does, and audio
+/// pushed faster just gets fewer provisional decodes.
+void pushedLoop(
+  ReaderBoot boot,
+  AudioFormat format,
+  SileroVad vad,
+  Segmenter segmenter,
+) {
+  final converter = AudioConverter(format);
+
+  void feed(Float32List samples) {
+    // A window at a time, as replay does, so a large chunk still gets level
+    // and snapshot checks at the same granularity as a small one.
+    for (var i = 0; i < samples.length; i += vadWindowSamples) {
+      final end = math.min(i + vadWindowSamples, samples.length);
+      segmenter.add(Float32List.sublistView(samples, i, end));
+    }
+  }
+
+  final commands = ReceivePort();
+  boot.handshake.send(commands.sendPort);
+  commands.listen((dynamic message) {
+    if (message is TypedData) {
+      feed(converter.add(message));
+    } else if (message == 'stop') {
+      feed(converter.flush());
+      segmenter.flush();
+      vad.dispose();
+      commands.close();
+      boot.events.send('done');
+    }
+  });
 }
 
 /// Drains the ring, runs the VAD, and ships finished utterances back.

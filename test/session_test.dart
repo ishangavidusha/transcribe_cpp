@@ -36,10 +36,12 @@ final _oneUtterance = _script([(20, 0.0), (40, 0.9), (30, 0.0)]);
 /// same utterance extends a shorter one and live text can agree on it.
 class _FakeDecoder implements UtteranceDecoder {
   int calls = 0;
+  Float32List? last;
 
   @override
   Future<Transcript> transcribe(Float32List pcm) async {
     calls++;
+    last = pcm;
     final words = math.max(1, pcm.length ~/ (8 * vadWindowSamples));
     return Transcript(
       text: List.generate(words, (i) => 'w${i + 1}').join(' '),
@@ -65,6 +67,9 @@ class _FakeSource implements ReaderSource {
   final _messages = StreamController<Object?>();
   final states = StreamController<CaptureStatus>.broadcast();
   bool closed = false;
+
+  @override
+  (Object, StackTrace)? error;
 
   /// Feeds [windows] VAD windows of audio, one window at a time.
   void feed(int windows) {
@@ -98,11 +103,13 @@ class _FakeSource implements ReaderSource {
 void main() {
   late _FakeDecoder decoder;
   late List<_FakeSource> live;
+  late List<_FakeSource> pushed;
   Object? startError;
 
   Future<TranscribeSession> open({List<double>? script}) {
     decoder = _FakeDecoder();
     live = [];
+    pushed = [];
     startError = null;
     return openSessionAt(
       'unused',
@@ -113,6 +120,29 @@ void main() {
           if (startError != null) throw startError!;
           final s = _FakeSource(script ?? _oneUtterance, settings);
           live.add(s);
+          return s;
+        },
+        pushed: (settings, audio, format) async {
+          final s = _FakeSource(script ?? _oneUtterance, settings);
+          var stopped = false;
+          void stop() {
+            if (stopped) return;
+            stopped = true;
+            s.stop();
+          }
+
+          // Like the pushed reader: each chunk is fed as it arrives, in
+          // engine format, and the end of the stream is the stop.
+          audio.listen(
+            (chunk) => s.feed(chunk.lengthInBytes ~/ (4 * vadWindowSamples)),
+            onError: (Object e, StackTrace st) {
+              s.error ??= (e, st);
+              stop();
+            },
+            onDone: stop,
+            cancelOnError: true,
+          );
+          pushed.add(s);
           return s;
         },
         replay: (settings, audio) async {
@@ -337,6 +367,105 @@ void main() {
       session.utterances.listen((_) {}, onError: errors.add);
       await session.replay(windows(90));
       expect(errors.single, isA<FormatException>());
+      expect(session.state.value, SessionState.idle);
+    });
+  });
+
+  group('pushed audio', () {
+    test('transcribes a stream of the app\'s audio and ends with it', () async {
+      final session = await open();
+      final audio = StreamController<TypedData>();
+      final states = <SessionState>[];
+      session.state.addListener(() => states.add(session.state.value));
+      final done = session.transcribeStream(
+        audio.stream,
+        format: AudioFormat.engine,
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(session.state.value, SessionState.listening);
+      // The whole script, in uneven chunks.
+      audio.add(windows(25));
+      audio.add(windows(40));
+      audio.add(windows(25));
+      await audio.close();
+      await done;
+      expect(session.text.value.settled, isNotEmpty);
+      expect(session.state.value, SessionState.idle);
+      expect(states.last, SessionState.idle);
+      // Never touched the microphone.
+      expect(live, isEmpty);
+    });
+
+    test('stop ends it early and keeps what was pushed', () async {
+      final session = await open();
+      final audio = StreamController<TypedData>();
+      final done = session.transcribeStream(
+        audio.stream,
+        format: AudioFormat.engine,
+      );
+      await Future<void>.delayed(Duration.zero);
+      audio.add(windows(60)); // into the utterance, not past it
+      await Future<void>.delayed(Duration.zero);
+      await session.stop();
+      await done;
+      // Flushed at the stop rather than lost.
+      expect(session.text.value.settled, isNotEmpty);
+      expect(session.state.value, SessionState.idle);
+    });
+
+    test('an error on the stream ends the run and is rethrown', () async {
+      final session = await open();
+      final audio = StreamController<TypedData>();
+      final done = session.transcribeStream(
+        audio.stream,
+        format: AudioFormat.engine,
+      );
+      await Future<void>.delayed(Duration.zero);
+      audio.addError(const FormatException('mic died'));
+      await expectLater(done, throwsFormatException);
+      expect(session.state.value, SessionState.idle);
+      // And the session is usable again.
+      await session.start();
+      await session.stop();
+    });
+
+    test('rejects a format it cannot convert before starting', () async {
+      final session = await open();
+      expect(
+        () => session.transcribeStream(
+          const Stream.empty(),
+          format: const AudioFormat(sampleRate: 4000),
+        ),
+        throwsArgumentError,
+      );
+      expect(session.state.value, SessionState.idle);
+    });
+  });
+
+  group('transcribe', () {
+    test('hands engine-format audio to the decoder as it is', () async {
+      final session = await open();
+      final audio = windows(10);
+      final t = await session.transcribe(audio, format: AudioFormat.engine);
+      expect(identical(decoder.last, audio), isTrue);
+      expect(t.text, isNotEmpty);
+    });
+
+    test('converts other formats to 16 kHz mono first', () async {
+      final session = await open();
+      // One second of stereo int16 at 48 kHz.
+      final audio = Int16List(48000 * 2);
+      await session.transcribe(
+        audio,
+        format: const AudioFormat(sampleRate: 48000, channels: 2),
+      );
+      expect(decoder.last!.length, 16000);
+    });
+
+    test('needs no microphone and leaves the session idle', () async {
+      final session = await open();
+      await session.transcribe(windows(4), format: AudioFormat.engine);
+      expect(live, isEmpty);
       expect(session.state.value, SessionState.idle);
     });
   });
