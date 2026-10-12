@@ -60,3 +60,13 @@ await session.stop();
 ```
 
 [Set it up in your app →](getting-started/)
+
+## Built on transcribe.cpp
+
+The speech recognition itself is
+[transcribe.cpp](https://github.com/handy-computer/transcribe.cpp), a fast
+C/C++ engine for many speech models. transcribe_cpp brings it to Flutter and
+adds what an app needs around it: microphone capture that survives calls and
+route changes, voice detection, sentence splitting, live text, and model
+downloads. See the [acknowledgements](reference/acknowledgements/) for
+everyone whose work this builds on.

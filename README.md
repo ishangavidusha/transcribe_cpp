@@ -8,6 +8,10 @@
 **Offline speech-to-text for Flutter.** The user talks, your app gets text,
 and the audio never leaves the phone.
 
+Built on [transcribe.cpp](https://github.com/handy-computer/transcribe.cpp),
+which does the speech recognition. This package brings it to Flutter, with
+microphone capture, voice detection and live text around it.
+
 <p align="center">
   <img src="https://raw.githubusercontent.com/ishangavidusha/transcribe_cpp/main/screenshots/demo.gif" width="400" alt="Words appearing on screen as a speech is transcribed live on the phone">
 </p>
@@ -108,11 +112,38 @@ listening in the background, tuning, and how it all works.
 
 The [example app](example/) is a complete app with a model picker.
 
+## Contributing
+
+Bug reports, ideas and pull requests are welcome. See
+[CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Acknowledgements
+
+transcribe_cpp stands on the work of others:
+
+- **[transcribe.cpp](https://github.com/handy-computer/transcribe.cpp)** by
+  the transcribe.cpp authors, the engine that runs the models, and the
+  source of the model catalogue and the converted models on
+  [Hugging Face](https://huggingface.co/handy-computer).
+- **[ggml](https://github.com/ggml-org/ggml)**, the machine-learning library
+  underneath it.
+- **[Silero VAD](https://github.com/snakers4/silero-vad)**, the voice
+  detector, ported to C for this package.
+- The model authors, including **NVIDIA** for
+  [Parakeet](https://huggingface.co/nvidia/parakeet-tdt_ctc-110m) and the
+  **Moonshine** team for
+  [Moonshine](https://huggingface.co/moonshine-ai/moonshine-streaming-tiny).
+
+transcribe_cpp is an independent project, not an official part of
+transcribe.cpp.
+
 ## License
 
-MIT. The package includes builds of
-[transcribe.cpp](https://github.com/handy-computer/transcribe.cpp) and
-[ggml](https://github.com/ggml-org/ggml), and weights derived from
-[Silero VAD](https://github.com/snakers4/silero-vad), all MIT; see
-[THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md). Speech models carry their
-own licences, and some are non-commercial.
+MIT. The package includes builds of transcribe.cpp and ggml, and weights
+derived from Silero VAD, all MIT; see
+[THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md).
+
+Speech models are downloaded by your app and carry their own licences, and
+some are non-commercial. Parakeet, for example, is CC-BY-4.0, which asks apps
+that use it to credit NVIDIA. Check `ModelDescriptor.license` for each model
+you ship.

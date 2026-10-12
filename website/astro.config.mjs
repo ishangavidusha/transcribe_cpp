@@ -43,6 +43,7 @@ export default defineConfig({
 						{ slug: 'reference/platforms' },
 						{ slug: 'reference/performance' },
 						{ slug: 'reference/troubleshooting' },
+						{ slug: 'reference/acknowledgements' },
 						{
 							label: 'API reference',
 							link: 'https://pub.dev/documentation/transcribe_cpp/latest/',
