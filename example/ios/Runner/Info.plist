@@ -6,6 +6,10 @@
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>This app transcribes your speech on-device. Audio never leaves your phone.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>

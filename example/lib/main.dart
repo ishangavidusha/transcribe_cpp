@@ -15,6 +15,7 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:transcribe_cpp/transcribe_cpp.dart';
 
+import 'background.dart';
 import 'session_log.dart';
 
 void main() {
@@ -177,6 +178,7 @@ class _DictationPageState extends State<DictationPage> {
         stableAgreement: _stableAgreement,
         recordTo: recording,
       );
+      await BackgroundListening.begin();
       log.start();
       setState(() {
         _listening = true;
@@ -202,6 +204,7 @@ class _DictationPageState extends State<DictationPage> {
       _status = 'Finishing';
     });
     await session.stop();
+    await BackgroundListening.end();
     // After stop, so the flushed final utterance is in the tally.
     _log?.stop();
     _log = null;

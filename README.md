@@ -86,10 +86,9 @@ and SHA-256 match the catalogue.
 The plugin declares no permissions. On Android, an app declares
 `android.permission.RECORD_AUDIO` to listen and `android.permission.INTERNET`
 to download models, in its own manifest. Debug builds add INTERNET
-automatically, so its absence first shows up in a release build. Android
-silences the microphone of an app in the background unless the app runs a
-foreground service of type `microphone`; the session reports that as
-`CaptureState.interrupted`. Model
+automatically, so its absence first shows up in a release build. To keep
+listening after the user leaves the app, see
+[Listening in the background](#listening-in-the-background). Model
 licences differ, and some are non-commercial: check
 `ModelDescriptor.license` before shipping one.
 
@@ -113,6 +112,70 @@ await session.dispose(); // releases the model
 with a `stream` that replays the current value); `utterances`, `events` and
 `dropouts` are streams. `replay(samples)` feeds a recording through the same
 pipeline as the microphone, to compare settings on identical audio.
+
+## Listening in the background
+
+A session listens while the app is on screen. Keeping it going after the user
+switches away is the app's decision rather than the plugin's: it needs
+configuration the plugin does not declare, and both stores ask the app to
+justify it. The example app does it on both platforms
+([`example/lib/background.dart`](example/lib/background.dart)).
+
+### iOS
+
+Add the `audio` background mode to `Info.plist`:
+
+```xml
+<key>UIBackgroundModes</key>
+<array>
+  <string>audio</string>
+</array>
+```
+
+Nothing else changes. An active audio session keeps the app running, and calls
+and Siri still arrive as interruptions the session recovers from. Start the
+session while the app is in front: iOS does not let an app start recording
+from the background. App Review expects the mode to serve a feature the user
+can see, and the system shows its microphone indicator throughout.
+
+### Android
+
+Android silences an app's recording a few seconds after it leaves the screen,
+which the session reports as `CaptureState.interrupted`, unless the app runs a
+foreground service of type `microphone`.
+
+1. Declare the service and its permissions in the app's manifest:
+
+   ```xml
+   <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
+   <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+
+   <application ...>
+       <service
+           android:name=".ListeningService"
+           android:exported="false"
+           android:foregroundServiceType="microphone"/>
+   </application>
+   ```
+
+2. Write the service. It only calls `startForeground` with
+   `ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE` and an ongoing
+   notification; it does no audio work, and the session goes on capturing
+   exactly as before.
+   [`ListeningService.kt`](example/android/app/src/main/kotlin/com/transcribecpp/transcribe_cpp_example/ListeningService.kt)
+   can be copied as it is.
+
+3. Start it right after `await session.start()` and stop it after
+   `await session.stop()`, over a method channel
+   ([`MainActivity.kt`](example/android/app/src/main/kotlin/com/transcribecpp/transcribe_cpp_example/MainActivity.kt)).
+
+The order matters. From Android 14 a microphone service can only start while
+the app is visible and already holds `RECORD_AUDIO`, which is exactly the
+state after `start()` returns; started from the background it is refused.
+From Android 13 the notification needs `POST_NOTIFICATIONS` to be shown, though
+the service runs without it. Google Play asks apps that declare a microphone
+foreground service to explain it in the Play Console.
 
 ## Running the example
 
