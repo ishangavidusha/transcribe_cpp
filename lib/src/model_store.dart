@@ -89,9 +89,14 @@ final class ModelStore {
   /// The hash is checked once, at install, not here: re-hashing a 1 GB file on
   /// every launch would cost seconds for no new information. The size check
   /// catches an entry whose file changed under the same id.
+  ///
+  /// One `stat` rather than an existence check and then a length: a file
+  /// removed between the two, by [remove] or by the app clearing its data,
+  /// made the second throw where the answer is simply "not installed".
   Future<bool> isInstalled(ModelDescriptor model) async {
-    final file = fileOf(model.id);
-    return await file.exists() && await file.length() == model.sizeBytes;
+    final stat = await fileOf(model.id).stat();
+    return stat.type == FileSystemEntityType.file &&
+        stat.size == model.sizeBytes;
   }
 
   /// Ids with a file installed, whatever catalogue they came from.
