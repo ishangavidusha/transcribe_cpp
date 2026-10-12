@@ -4,10 +4,9 @@ All notable changes to this package are documented here. This project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html); while the version
 is below `1.0.0`, a `0.x.0` bump may break the API and a `0.x.y` bump may not.
 
-## 0.0.1 — unreleased
+## 0.1.0 — 2026-10-12
 
-Not yet published to pub.dev. The public API is still being shaped and every
-export should be treated as unstable.
+First release: offline speech-to-text for Flutter on iOS and Android.
 
 ### Added
 
