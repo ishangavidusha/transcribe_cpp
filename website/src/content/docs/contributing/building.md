@@ -4,7 +4,9 @@ description: Work on the package itself — engine binaries, tests, CI and relea
 ---
 
 Apps that depend on the package from pub.dev need none of this. It is for
-working on transcribe_cpp itself, or depending on it through git.
+working on transcribe_cpp itself, or depending on it through git. Before
+opening a pull request, read the
+[contributing guide](https://github.com/ishangavidusha/transcribe_cpp/blob/main/CONTRIBUTING.md).
 
 ## Get the engine
 
