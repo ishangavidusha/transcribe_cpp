@@ -52,3 +52,7 @@ AGENTS.md
 # Model weights. Hundreds of megabytes, third-party, and downloaded at runtime
 # by design. The example's README says where to get them.
 *.gguf
+
+# Drafts of posts and promotional material, and the sources of images made
+# for them. Written here, published elsewhere.
+/drafts/

@@ -14,6 +14,20 @@ export default defineConfig({
 				'Offline, on-device speech-to-text for Flutter. Hands-free dictation on iOS and Android, with no network and no API keys.',
 			logo: { src: './src/assets/logo.svg' },
 			favicon: '/favicon.svg',
+			// The card shown when a page is shared on social sites and chats.
+			// Crawlers need an absolute URL.
+			head: [
+				{
+					tag: 'meta',
+					attrs: { property: 'og:image', content: 'https://ishangavidusha.github.io/transcribe_cpp/og.png' },
+				},
+				{ tag: 'meta', attrs: { property: 'og:image:width', content: '1280' } },
+				{ tag: 'meta', attrs: { property: 'og:image:height', content: '640' } },
+				{
+					tag: 'meta',
+					attrs: { name: 'twitter:image', content: 'https://ishangavidusha.github.io/transcribe_cpp/og.png' },
+				},
+			],
 			customCss: ['./src/styles/theme.css'],
 			social: [
 				{ icon: 'github', label: 'GitHub', href: 'https://github.com/ishangavidusha/transcribe_cpp' },
