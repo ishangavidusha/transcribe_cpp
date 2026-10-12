@@ -32,13 +32,13 @@ jobs:
     name: Build the Android engine
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - id: engine
         run: |
           for v in ENGINE_REF NDK_VERSION CMAKE_VERSION; do
             echo "$v=$(sed -n "s/^$v=\([^ ]*\).*/\1/p" tool/build_android.sh)" >> "$GITHUB_OUTPUT"
           done
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: handy-computer/transcribe.cpp
           ref: ${{ steps.engine.outputs.ENGINE_REF }}
@@ -49,7 +49,7 @@ jobs:
             "ndk;${{ steps.engine.outputs.NDK_VERSION }}" \
             "cmake;${{ steps.engine.outputs.CMAKE_VERSION }}" > /dev/null
           tool/build_android.sh engine
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: android-engine
           path: android/src/main/jniLibs/*/
@@ -59,9 +59,9 @@ jobs:
     name: Fetch the iOS engine
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: tool/fetch_ios_engine.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ios-engine
           path: ios/transcribe_cpp/Frameworks/TranscribeCpp.xcframework/
@@ -72,12 +72,12 @@ jobs:
     needs: android-engine
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           name: android-engine
           path: android/src/main/jniLibs
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 17
@@ -94,8 +94,8 @@ jobs:
     needs: ios-engine
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           name: ios-engine
           path: ios/transcribe_cpp/Frameworks/TranscribeCpp.xcframework
@@ -116,12 +116,12 @@ jobs:
       contents: write # the GitHub release
       id-token: write # pub.dev's OIDC login
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           name: android-engine
           path: android/src/main/jniLibs
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: ios-engine
           path: ios/transcribe_cpp/Frameworks/TranscribeCpp.xcframework
