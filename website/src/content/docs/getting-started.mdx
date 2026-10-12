@@ -1,0 +1,100 @@
+---
+title: Getting started
+description: Add transcribe_cpp to a Flutter app and transcribe speech from the microphone.
+---
+
+import { Steps, Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+<Steps>
+
+1. **Add the package.**
+
+   ```bash
+   flutter pub add transcribe_cpp
+   ```
+
+   It runs on iOS 16+ and Android 7+ (API 24, 64-bit). See
+   [Platforms](../reference/platforms/) for the details.
+
+2. **Let the app use the microphone and the network.**
+
+   The package declares no permissions of its own. Your app asks for the
+   microphone, and needs the network once, to download a model.
+
+   <Tabs>
+   <TabItem label="iOS">
+   In `ios/Runner/Info.plist`, say why you need the microphone. iOS shows this
+   text in the permission prompt:
+
+   ```xml
+   <key>NSMicrophoneUsageDescription</key>
+   <string>Your speech is transcribed on this device.</string>
+   ```
+   </TabItem>
+   <TabItem label="Android">
+   In `android/app/src/main/AndroidManifest.xml`, inside `<manifest>`:
+
+   ```xml
+   <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+   <uses-permission android:name="android.permission.INTERNET"/>
+   ```
+
+   Debug builds add `INTERNET` automatically, so if you forget it, you will
+   only find out in a release build.
+   </TabItem>
+   </Tabs>
+
+3. **Download a model.**
+
+   Models are not bundled with your app. `ModelManager` downloads the one you
+   ask for, checks it, and keeps it for next time:
+
+   ```dart
+   final models = await ModelManager.open();
+   final model = await models.ensure(
+     const ModelId('parakeet-tdt_ctc-110m-Q4_K_M'), // 90 MB, English
+   );
+   ```
+
+   The first call downloads; after that it returns immediately. See
+   [Models](../guides/models/) for choosing one and showing progress.
+
+4. **Transcribe.**
+
+   ```dart
+   final session = await TranscribeSession.open(model);
+
+   await session.start(); // asks for the microphone the first time
+   // ...the user speaks; each sentence is transcribed when they pause...
+   await session.stop();  // waits for the last sentence
+
+   await session.dispose(); // when you no longer need the model
+   ```
+
+   Show the text with a `ValueListenableBuilder`. It updates as the user
+   speaks:
+
+   ```dart
+   ValueListenableBuilder(
+     valueListenable: session.text,
+     builder: (context, text, _) => Text(text.full),
+   )
+   ```
+
+</Steps>
+
+<Aside type="tip">
+Opening a session loads the model, which takes a moment. Open it once, and
+call `start()` and `stop()` as often as you like.
+</Aside>
+
+## Next steps
+
+- [Transcribing from the microphone](../guides/microphone/): live text,
+  sentences, interruptions and the permission prompt.
+- [Bringing your own audio](../guides/your-own-audio/): if your app already
+  records audio.
+- [Listening in the background](../guides/background/): keep transcribing
+  after the user leaves the app.
+- [The example app](https://github.com/ishangavidusha/transcribe_cpp/tree/main/example):
+  a complete app with a model picker.

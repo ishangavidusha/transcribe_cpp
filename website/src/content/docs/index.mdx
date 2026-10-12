@@ -1,0 +1,62 @@
+---
+title: transcribe_cpp
+description: Offline, on-device speech-to-text for Flutter. Hands-free dictation on iOS and Android, with no network and no API keys.
+template: splash
+hero:
+  tagline: Offline speech-to-text for Flutter. The user talks, your app gets text, and the audio never leaves the phone.
+  image:
+    file: ../../assets/logo.svg
+  actions:
+    - text: Get started
+      link: getting-started/
+      icon: right-arrow
+    - text: View on GitHub
+      link: https://github.com/ishangavidusha/transcribe_cpp
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+<CardGrid stagger>
+	<Card title="Private by design" icon="seti:lock">
+		Everything runs on the device. No server, no account, no API key, and
+		no audio sent anywhere.
+	</Card>
+	<Card title="Hands-free" icon="approve-check">
+		Built-in voice detection decides when each sentence ends. There is no
+		button to hold down.
+	</Card>
+	<Card title="Live text" icon="pencil">
+		Words appear while the user is still speaking, and they settle in place
+		instead of flickering.
+	</Card>
+	<Card title="Fast" icon="rocket">
+		A sentence is transcribed in a fraction of a second, about 40 times
+		faster than real time on a mid-range phone.
+	</Card>
+	<Card title="Your audio or ours" icon="puzzle">
+		Use the built-in microphone handling, or feed in audio your app already
+		records, at any sample rate.
+	</Card>
+	<Card title="Many models" icon="list-format">
+		Download the model you want at runtime: a 50 MB one for small apps, or
+		bigger ones for more accuracy and languages.
+	</Card>
+</CardGrid>
+
+## Ten lines to your first transcript
+
+```dart
+final models = await ModelManager.open();
+final model = await models.ensure(const ModelId('parakeet-tdt_ctc-110m-Q4_K_M'));
+
+final session = await TranscribeSession.open(model);
+session.text.addListener(() => print(session.text.value.full));
+
+await session.start(); // asks for the microphone, then listens
+// ...the user speaks...
+await session.stop();
+```
+
+[Set it up in your app →](getting-started/)

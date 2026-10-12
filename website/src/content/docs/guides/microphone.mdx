@@ -1,0 +1,145 @@
+---
+title: Transcribing from the microphone
+description: Start and stop listening, show live text, and react to sentences, interruptions and permission denials.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+A `TranscribeSession` holds a loaded model and listens through the microphone.
+Open it once; then start and stop it as often as you like.
+
+```dart
+final session = await TranscribeSession.open(model);
+
+await session.start();
+// ...
+await session.stop();
+
+await session.dispose(); // releases the model
+```
+
+While it listens, the session splits what it hears into sentences at the
+user's pauses, transcribes each one, and shows the sentence in progress as it
+is being spoken. There is no button to hold: the session decides when each
+sentence ends.
+
+## Show the text
+
+`session.text` is the transcript of the current run. Bind a text view to it:
+
+```dart
+ValueListenableBuilder<LiveText>(
+  valueListenable: session.text,
+  builder: (context, text, _) => Text.rich(TextSpan(children: [
+    TextSpan(text: text.settled),                 // finished sentences
+    TextSpan(
+      text: text.interim.isEmpty ? '' : ' ${text.interim}',
+      style: const TextStyle(color: Colors.grey), // still being spoken
+    ),
+  ])),
+)
+```
+
+- `settled` holds every finished sentence and only grows.
+- `interim` is the sentence still being spoken. A word only appears there once
+  two consecutive decodes agree on it, so the text grows in place instead of
+  flickering. It is empty between sentences.
+- `full` is both together, for a single `Text`.
+
+`text` is cleared when `start()` is called again.
+
+## Know what the session is doing
+
+`session.state` is one of:
+
+| State | Meaning |
+|---|---|
+| `idle` | Model loaded, microphone off. |
+| `starting` | Asking for permission and starting the microphone. |
+| `listening` | Transcribing. |
+| `finishing` | Microphone off; the last sentence is being transcribed. |
+| `replaying` | Running a recording through, see [Tuning](../tuning/). |
+
+Every `Live` value, including `state` and `text`, is a `ValueListenable` for
+widgets and also has a `stream` that starts with the current value.
+
+## Microphone permission
+
+`start()` asks for the microphone the first time. If the user says no, it
+throws a `StateError`, and asking again does nothing: iOS only asks once, and
+Android stops asking after the second refusal. Send the user to the app's
+settings instead.
+
+```dart
+try {
+  await session.start();
+} on StateError {
+  showDialog(/* explain, and offer a link to Settings */);
+}
+```
+
+## When the microphone goes quiet
+
+Calls, Siri or the Assistant, another app, or headphones being plugged in can
+all take the microphone away. `session.capture` tells you, so you can show the
+user why nothing is happening:
+
+| `capture.value.state` | Meaning |
+|---|---|
+| `running` | Hearing the microphone. |
+| `interrupted` | Something else has the microphone, such as a call. The session resumes by itself when it is released. |
+| `recovering` | The audio route changed or the audio system restarted. Back in a moment. |
+| `failed` | Could not recover. `capture.value.message` says why; call `start()` again. |
+
+<Aside>
+On Android, an app that goes to the background is silenced after a few
+seconds and shows as `interrupted`. To keep listening there, see
+[Listening in the background](../background/).
+</Aside>
+
+## Each sentence, as it is finished
+
+For more than the text, listen to `session.utterances`. Each result has the
+text, when it was said, and how long the decode took. Results with
+`isFinal: false` are interim versions of the sentence in progress; each one
+replaces the previous, and the final one replaces them all.
+
+```dart
+session.utterances.where((u) => u.isFinal).listen((u) {
+  print('${u.start}: ${u.text} (decoded in ${u.decode.inMilliseconds} ms)');
+  // u.transcript.words has per-word timings.
+});
+```
+
+Decode errors arrive as errors on this stream.
+
+## Speaking indicator and level meter
+
+- `session.level` is updated about every 60 ms, with `probability` (how sure
+  the voice detector is that someone is speaking) and `inputRms` (how loud the
+  microphone is). Use it for a meter.
+- `session.events` says when speech starts (`SpeechStarted`), when a sentence
+  ends (`SpeechEnded`), and when a short sound, such as a cough or a click, was
+  ignored (`SpeechDiscarded`).
+
+## Options
+
+```dart
+await session.start(
+  voiceProcessing: false,                              // echo cancellation
+  provisionalInterval: const Duration(milliseconds: 350), // live text pace
+  stableAgreement: 2,                                  // live text stability
+  endpointer: const EndpointerConfig(),                // when sentences end
+  normalizer: const NormalizerConfig(),                // automatic gain
+  recordTo: '/path/to/session.wav',                    // keep the audio
+);
+```
+
+- **`voiceProcessing`** turns on the system's echo cancellation and noise
+  suppression. Leave it off unless your app plays sound while listening: it is
+  tuned for calls, not transcription.
+- **`provisionalInterval`** is how often the sentence in progress is
+  re-transcribed for live text. `Duration.zero` turns live text off.
+- **`endpointer`** and **`normalizer`** are explained in [Tuning](../tuning/).
+- **`recordTo`** writes the raw audio to a WAV file, which you can play back
+  later with `replay()`.

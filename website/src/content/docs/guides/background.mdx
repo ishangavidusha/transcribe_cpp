@@ -1,0 +1,83 @@
+---
+title: Listening in the background
+description: Keep transcribing after the user switches to another app or locks the screen.
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+A session listens while your app is on screen. To keep listening after the
+user leaves the app, each platform needs some setup in your app. The package
+does not do this for you: it changes your app's permissions, and both app
+stores ask you to justify it.
+
+The [example app](https://github.com/ishangavidusha/transcribe_cpp/tree/main/example)
+does it on both platforms.
+
+## iOS
+
+Add the `audio` background mode to `ios/Runner/Info.plist`:
+
+```xml
+<key>UIBackgroundModes</key>
+<array>
+  <string>audio</string>
+</array>
+```
+
+That is all. While the session is listening, iOS keeps your app running and
+shows its microphone indicator. Calls and Siri still interrupt it, and it
+resumes afterwards.
+
+Start the session while your app is on screen: iOS does not let an app start
+recording from the background. App Review expects background audio to serve a
+feature the user can see.
+
+## Android
+
+Android silences a background app's microphone after a few seconds, and the
+session reports `interrupted`, unless the app runs a *foreground service* of
+type `microphone`, which shows a notification while it runs.
+
+<Steps>
+
+1. Declare the service and its permissions in
+   `android/app/src/main/AndroidManifest.xml`:
+
+   ```xml
+   <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
+   <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+
+   <application ...>
+       <service
+           android:name=".ListeningService"
+           android:exported="false"
+           android:foregroundServiceType="microphone"/>
+   </application>
+   ```
+
+2. Add the service. It only shows the notification; the session keeps doing
+   the listening. Copy the example's
+   [`ListeningService.kt`](https://github.com/ishangavidusha/transcribe_cpp/blob/main/example/android/app/src/main/kotlin/com/transcribecpp/transcribe_cpp_example/ListeningService.kt)
+   into your app's Kotlin folder, changing the package name.
+
+3. Start it right after `await session.start()` and stop it after
+   `await session.stop()`, through a method channel. The example's
+   [`MainActivity.kt`](https://github.com/ishangavidusha/transcribe_cpp/blob/main/example/android/app/src/main/kotlin/com/transcribecpp/transcribe_cpp_example/MainActivity.kt)
+   and
+   [`background.dart`](https://github.com/ishangavidusha/transcribe_cpp/blob/main/example/lib/background.dart)
+   show how.
+
+</Steps>
+
+<Aside type="caution">
+The order matters. Since Android 14, a microphone service can only start while
+your app is on screen and already has the microphone permission, which is
+exactly the situation after `start()` returns. Started from the background, it
+is refused.
+</Aside>
+
+From Android 13 the notification needs the `POST_NOTIFICATIONS` permission to
+be visible; the service works without it, but the user will not see why the
+microphone is on. Google Play asks apps with a microphone foreground service to
+explain it in the Play Console.
