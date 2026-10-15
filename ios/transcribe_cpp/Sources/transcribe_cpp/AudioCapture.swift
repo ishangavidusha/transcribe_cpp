@@ -1,4 +1,5 @@
 import AVFoundation
+import CallKit
 import Foundation
 
 // TranscribeCppC is a SwiftPM module name. Under CocoaPods the C and Swift
@@ -45,6 +46,10 @@ import Foundation
 ///     and silently produces garbage at the wrong rate.
 ///   * **Media services reset**: every session, engine, and node handle is
 ///     dead. Nothing is salvageable and everything is rebuilt from scratch.
+///   * **A call already in progress at start**: no interruption is posted,
+///     because nothing was interrupted, so the session would "start" on a
+///     microphone the call owns. Start checks for a call first, reports
+///     `interrupted`, and starts when the last call ends.
 ///
 /// Audio never crosses into Dart through a platform channel. The tap writes
 /// into `audio_ring`, and a Dart isolate reads it over FFI. A channel hop per
@@ -90,6 +95,15 @@ public final class AudioCapture {
     private var tapInstalled = false
     private var lastErrorMessage: String?
 
+    /// Sees phone calls and VoIP calls that report through CallKit. Its
+    /// delegate callbacks arrive on `queue`.
+    private let calls = CXCallObserver()
+    private let callWatcher = CallWatcher()
+
+    /// True while we are holding off because a call owned the microphone at
+    /// start, as opposed to an interruption iOS told us about.
+    private var waitingForCall = false
+
     /// Reused across callbacks. Allocating a buffer inside the tap would put a
     /// malloc on an audio thread.
     private var outputBuffer: AVAudioPCMBuffer?
@@ -120,6 +134,8 @@ public final class AudioCapture {
         guard let ring = audio_ring_create(frames) else { return nil }
         self.ring = ring
         observeSessionNotifications()
+        callWatcher.onChange = { [weak self] in self?.callsChanged() }
+        calls.setDelegate(callWatcher, queue: queue)
     }
 
     deinit {
@@ -145,6 +161,10 @@ public final class AudioCapture {
 
     public func start() throws {
         guard state != .running && state != .starting else { return }
+        if callInProgress {
+            waitForCall()
+            return
+        }
         state = .starting
         do {
             try configureSession()
@@ -157,6 +177,7 @@ public final class AudioCapture {
     }
 
     public func stop() {
+        waitingForCall = false
         teardownEngine()
         try? AVAudioSession.sharedInstance().setActive(
             false,
@@ -278,6 +299,25 @@ public final class AudioCapture {
             // splicing across it.
             audio_ring_note_dropped(ring, frames)
         }
+    }
+
+    // MARK: - Calls
+
+    private var callInProgress: Bool {
+        calls.calls.contains { !$0.hasEnded }
+    }
+
+    private func waitForCall() {
+        waitingForCall = true
+        lastErrorMessage = "a call is using the microphone"
+        state = .interrupted
+        lastErrorMessage = nil
+    }
+
+    private func callsChanged() {
+        guard waitingForCall, !callInProgress else { return }
+        waitingForCall = false
+        restart(reason: "call ended")
     }
 
     // MARK: - Disruption
@@ -403,6 +443,16 @@ public final class AudioCapture {
     private func fail(_ error: Error) {
         lastErrorMessage = lastErrorMessage ?? error.localizedDescription
         state = .failed
+    }
+}
+
+/// CallKit's delegate must be an Objective-C object, and `AudioCapture` is
+/// not one.
+private final class CallWatcher: NSObject, CXCallObserverDelegate {
+    var onChange: (() -> Void)?
+
+    func callObserver(_: CXCallObserver, callChanged _: CXCall) {
+        onChange?()
     }
 }
 

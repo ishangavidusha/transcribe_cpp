@@ -45,10 +45,17 @@ class Model {
   }
 
   /// Loads a GGUF from disk. Blocking — call this on a worker isolate.
-  static Model load(String path) {
+  ///
+  /// [cpu] skips the GPU. The engine otherwise picks the best backend, which
+  /// on iOS is Metal, and iOS refuses GPU work from an app in the background.
+  static Model load(String path, {bool cpu = false}) {
     return using((arena) {
       final params = arena<transcribe_model_load_params>();
       bindings.transcribe_model_load_params_init(params);
+      if (cpu) {
+        params.ref.backendAsInt =
+            transcribe_backend_request.TRANSCRIBE_BACKEND_CPU.value;
+      }
 
       final out = arena<Pointer<transcribe_model>>();
       _check(
@@ -67,6 +74,8 @@ class Model {
   /// or `CPU0`. Worth logging on device — it is the fastest way to catch a
   /// build that silently fell back to CPU.
   String get backend => _str(bindings.transcribe_model_backend(_ptr));
+
+  bool get isGpu => !backend.toUpperCase().startsWith('CPU');
 
   String get architecture => _str(bindings.transcribe_model_arch_string(_ptr));
 

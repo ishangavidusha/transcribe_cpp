@@ -13,6 +13,7 @@ import 'transcript.dart';
 enum _Op {
   load,
   info,
+  background,
   run,
   streamBegin,
   streamFeed,
@@ -86,6 +87,16 @@ class Transcriber implements UtteranceDecoder {
   /// Check [ModelInfo.isGpu] on a real device — a silent CPU fallback is the
   /// most common reason on-device numbers disappoint.
   Future<ModelInfo> info() async => await _send(_Op.info) as ModelInfo;
+
+  /// Tells the worker whether the app is in the background.
+  ///
+  /// iOS refuses GPU work from a background app, and a refused Metal command
+  /// buffer leaves the ggml backend failing every later compute, even after
+  /// the app returns. So in the background the model is reloaded on the CPU,
+  /// and on return it is reloaded on the GPU again. Speech heard while away is
+  /// still transcribed, more slowly, while nobody is watching.
+  Future<void> setBackground(bool background) =>
+      _send(_Op.background, background);
 
   /// Transcribes one clip of mono float32 16 kHz PCM.
   @override
@@ -191,6 +202,23 @@ void _workerMain(_Boot boot) {
   Model? model;
   Session? session;
   TranscribeStream? stream;
+  var path = '';
+  var threads = 0;
+
+  // Whether the model is on the CPU because we put it there: for the
+  // background, or after the GPU failed. A device whose best backend is the
+  // CPU anyway (Android) never sets this, so it never reloads.
+  var forcedCpu = false;
+
+  void reload({required bool cpu}) {
+    session?.dispose();
+    model?.dispose();
+    session = null;
+    model = null;
+    model = Model.load(path, cpu: cpu);
+    session = model!.createSession(threads: threads);
+    forcedCpu = cpu;
+  }
 
   commands.listen((dynamic message) {
     final request = message as _Request;
@@ -201,9 +229,21 @@ void _workerMain(_Boot boot) {
     try {
       switch (request.op) {
         case _Op.load:
-          final (path, threads) = request.arg! as (String, int);
+          (path, threads) = request.arg! as (String, int);
           model = Model.load(path);
           session = model!.createSession(threads: threads);
+          value = null;
+
+        case _Op.background:
+          final background = request.arg! as bool;
+          // An open stream belongs to the session a reload would free.
+          if (stream == null && model != null) {
+            if (background && model!.isGpu) {
+              reload(cpu: true);
+            } else if (!background && forcedCpu) {
+              reload(cpu: false);
+            }
+          }
           value = null;
 
         case _Op.info:
@@ -214,7 +254,17 @@ void _workerMain(_Boot boot) {
           );
 
         case _Op.run:
-          value = session!.run(request.arg! as Float32List);
+          final pcm = request.arg! as Float32List;
+          try {
+            value = session!.run(pcm);
+          } on TranscribeException catch (e) {
+            // The engine's documented recovery for a backend failure: reload
+            // on the CPU and retry. This catches the decode that was already
+            // on the GPU when the app went to the background.
+            if (e.status != TranscribeStatus.backend || forcedCpu) rethrow;
+            reload(cpu: true);
+            value = session!.run(pcm);
+          }
 
         case _Op.streamBegin:
           final (policy, agreementN) = request.arg! as (int, int);
