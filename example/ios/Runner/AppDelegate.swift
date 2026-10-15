@@ -12,5 +12,20 @@ import UIKit
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+
+    // Keeps the screen on while listening or downloading. See screen.dart.
+    guard let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "Screen")
+    else { return }
+    FlutterMethodChannel(
+      name: "transcribe_cpp_example/screen",
+      binaryMessenger: registrar.messenger()
+    ).setMethodCallHandler { call, result in
+      guard call.method == "keepOn", let on = call.arguments as? Bool else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      UIApplication.shared.isIdleTimerDisabled = on
+      result(nil)
+    }
   }
 }
