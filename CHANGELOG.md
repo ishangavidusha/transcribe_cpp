@@ -4,6 +4,28 @@ All notable changes to this package are documented here. This project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html); while the version
 is below `1.0.0`, a `0.x.0` bump may break the API and a `0.x.y` bump may not.
 
+## 0.1.2 — 2026-10-15
+
+### Fixed
+
+- On iOS, starting the microphone during a phone call did nothing and
+  reported nothing. Capture now reports `interrupted`, with the message "a
+  call is using the microphone", and starts by itself when the call ends.
+- On iOS, transcription stopped for good once the app went to the
+  background: iOS refuses GPU work from a background app, and the Metal
+  backend cannot recover from a refused command buffer. The session now
+  moves decoding to the CPU when the app is hidden and back to the GPU when
+  it returns, and a decode the GPU refuses is retried on the CPU, so an app
+  with background audio keeps transcribing with the screen locked.
+
+### Changed
+
+- The example app is rebuilt around `ModelManager`: browse the catalogue,
+  see each model's languages, size and licence, and download, switch or
+  delete models. The transcript is live text in a box at the top with
+  selectable, copyable paragraphs below, one per pause. The screen stays on
+  while listening or downloading.
+
 ## 0.1.1 — 2026-10-12
 
 ### Fixed
