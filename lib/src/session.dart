@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:isolate';
 import 'dart:typed_data';
+
+import 'package:flutter/widgets.dart' show AppLifecycleListener;
 
 import 'activity.dart' as activity;
 import 'audio_format.dart';
@@ -565,12 +568,23 @@ Future<TranscribeSession> openSessionAt(
     );
   }
   final transcriber = await Transcriber.open(path, threads: threads);
+  // Only iOS: the model runs on Metal, which iOS refuses to a background
+  // app. Android's engine is on the CPU already.
+  final lifecycle = Platform.isIOS
+      ? AppLifecycleListener(
+          onHide: () => transcriber.setBackground(true).ignore(),
+          onShow: () => transcriber.setBackground(false).ignore(),
+        )
+      : null;
   return TranscribeSession._(
     transcriber,
     weights,
     sources,
     await transcriber.info(),
-    transcriber.dispose,
+    () {
+      lifecycle?.dispose();
+      return transcriber.dispose();
+    },
   );
 }
 

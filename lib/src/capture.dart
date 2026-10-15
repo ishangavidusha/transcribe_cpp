@@ -16,6 +16,9 @@ enum CaptureState {
   /// A call, the assistant, or another app took the microphone. Capture
   /// resumes by itself if the interrupting app releases it cleanly.
   ///
+  /// Starting during a call lands here too, instead of starting on a
+  /// microphone the call owns, and capture starts when the call ends.
+  ///
   /// On Android the recording keeps running and delivers silence instead, and
   /// this is also reported when the app goes to the background without a
   /// microphone foreground service, or the user turns on the microphone
@@ -42,8 +45,9 @@ class CaptureStatus {
 
   final CaptureState state;
 
-  /// Why, for [CaptureState.failed] and [CaptureState.recovering] — e.g.
-  /// "route changed: ...". Null otherwise.
+  /// Why, for [CaptureState.failed], [CaptureState.recovering] and, when
+  /// the platform knows, [CaptureState.interrupted] — e.g. "route changed:
+  /// ..." or "a call is using the microphone". Null otherwise.
   final String? message;
 
   @override
