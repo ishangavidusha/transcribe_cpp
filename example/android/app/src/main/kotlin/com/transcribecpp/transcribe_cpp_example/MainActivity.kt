@@ -3,6 +3,7 @@ package com.transcribecpp.transcribe_cpp_example
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
+import android.view.WindowManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -27,6 +28,20 @@ class MainActivity : FlutterActivity() {
                 }
                 else -> result.notImplemented()
             }
+        }
+        // Keeps the screen on while listening or downloading. See screen.dart.
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "transcribe_cpp_example/screen",
+        ).setMethodCallHandler { call, result ->
+            val on = call.arguments as? Boolean
+            if (call.method != "keepOn" || on == null) {
+                result.notImplemented()
+                return@setMethodCallHandler
+            }
+            val flag = WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+            if (on) window.addFlags(flag) else window.clearFlags(flag)
+            result.success(null)
         }
     }
 
