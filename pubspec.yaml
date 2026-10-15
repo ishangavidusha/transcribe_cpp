@@ -1,6 +1,6 @@
 name: transcribe_cpp
 description: "Offline, on-device speech-to-text for Flutter. Hands-free dictation with live text on iOS and Android: no network, no API keys, audio never leaves the phone."
-version: 0.1.1
+version: 0.1.2
 homepage: https://github.com/ishangavidusha/transcribe_cpp
 repository: https://github.com/ishangavidusha/transcribe_cpp
 issue_tracker: https://github.com/ishangavidusha/transcribe_cpp/issues
