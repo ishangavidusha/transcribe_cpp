@@ -404,7 +404,12 @@ public final class AudioCapture {
             // 16 kHz HFP headset and back. The converter and tap are bound to
             // the old format and must be rebuilt, or capture silently produces
             // resampled nonsense.
-            restart(reason: "route changed")
+            //
+            // Only the engine. The session stays active through a route
+            // change, and re-activating it mid-change was refused on device
+            // with '!int' (cannotInterruptOthers), which stopped capture for
+            // good on the first headphone unplug.
+            restart(reason: "route changed", reactivate: false)
 
         case .categoryChange, .unknown, .wakeFromSleep,
              .noSuitableRouteForCategory:
@@ -427,11 +432,15 @@ public final class AudioCapture {
     /// a loop: a route that cannot be opened will not fix itself by being
     /// asked again immediately, and a retry loop on an audio session is a
     /// reliable way to wedge the device.
-    private func restart(reason: String) {
+    ///
+    /// [reactivate] is for when the session itself was lost — an interruption,
+    /// a call, a media-services reset. A route change leaves it active and
+    /// only invalidates the engine's formats.
+    private func restart(reason: String, reactivate: Bool = true) {
         state = .recovering
         teardownEngine()
         do {
-            try configureSession()
+            if reactivate { try configureSession() }
             try startEngine()
             state = .running
         } catch {
