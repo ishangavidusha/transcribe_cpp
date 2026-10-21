@@ -179,5 +179,29 @@ void main() {
       s.flush();
       expect(events.whereType<Utterance>(), isEmpty);
     });
+
+    test('restart finishes the utterance in progress, then starts fresh', () {
+      // What a route change does. Before 0.1.3 it called reset, and the
+      // sentence spoken before the headphones came out was lost.
+      final events = <Object>[];
+      final s = _segmenter(
+        _script([(5, 0.0), (30, 0.9), (5, 0.0), (30, 0.9), (30, 0.0)]),
+        events,
+      );
+      _feed(s, _audio(35), vadWindowSamples);
+      expect(events.whereType<Utterance>(), isEmpty);
+
+      s.restart();
+      expect(
+        events.whereType<Utterance>(),
+        hasLength(1),
+        reason: 'the speech before the disruption is emitted, not dropped',
+      );
+
+      // The scripted VAD restarts too, so the new route sees fresh speech
+      // and closes it as an utterance of its own.
+      _feed(s, _audio(100), vadWindowSamples);
+      expect(events.whereType<Utterance>(), hasLength(2));
+    });
   });
 }
