@@ -4,6 +4,20 @@ All notable changes to this package are documented here. This project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html); while the version
 is below `1.0.0`, a `0.x.0` bump may break the API and a `0.x.y` bump may not.
 
+## 0.1.3 — 2026-10-21
+
+### Fixed
+
+- On iOS, changing the audio route mid-session (headphones or a Bluetooth
+  headset connected or removed) could stop the microphone for good with
+  "route changed: ... (OSStatus error 560557684)": iOS refused to
+  re-activate an audio session that was still active. A route change now
+  rebuilds only the engine for the new input, and capture continues.
+- A sentence in progress when the audio route changed, or when an
+  interruption ended, was thrown away: everything said before the switch was
+  lost. It is now finished and delivered as a final result, and the new route
+  starts a new sentence.
+
 ## 0.1.2 — 2026-10-15
 
 ### Fixed
