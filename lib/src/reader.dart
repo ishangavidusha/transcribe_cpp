@@ -217,6 +217,19 @@ class Segmenter {
     normalizer?.reset();
   }
 
+  /// Closes out the utterance in progress, then forgets everything — for a
+  /// disruption (route change, interruption) after which the audio is not
+  /// contiguous with what came before.
+  ///
+  /// [reset] alone dropped the open utterance, so a user who pulled their
+  /// headphones out mid-sentence lost everything said before the switch. Those
+  /// words were heard; they are decoded as a final result like any other end
+  /// of speech, and the new route starts a new utterance.
+  void restart() {
+    flush();
+    reset();
+  }
+
   void flush() {
     for (final event in endpointer.flush()) {
       // A burst still open at end of stream may be discarded rather than
@@ -383,9 +396,10 @@ void captureLoop(ReaderBoot boot, SileroVad vad, Segmenter segmenter) {
     switch (message) {
       case 'reset':
         // Drain what is buffered first: it is audio from before the
-        // disruption and belongs to whatever the user was saying then.
+        // disruption and belongs to whatever the user was saying then, which
+        // is then finished rather than thrown away.
         drain();
-        segmenter.reset();
+        segmenter.restart();
         lastDropped = reader.dropped;
       case 'stop':
         timer?.cancel();
