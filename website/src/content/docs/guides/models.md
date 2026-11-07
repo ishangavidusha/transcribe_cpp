@@ -9,18 +9,26 @@ first launch, and keeps it.
 
 ## Which model?
 
-Start with one of these two. Both are English.
+Start with one of these. The first two are English; Whisper covers 99
+languages.
 
 | Model | Download | Word error rate* | Good for |
 |---|---|---|---|
 | `parakeet-tdt_ctc-110m-Q4_K_M` | 90 MB | 2.5% | Most apps. Fast and accurate. |
 | `moonshine-streaming-tiny-Q8_0` | 50 MB | 4.5% | When download size matters most. |
+| `whisper-base-Q8_0` | 81 MB | 5.1% | Speech that is not English. |
 
-\* LibriSpeech test-clean, as published in
+\* LibriSpeech test-clean (English), as published in
 [transcribe.cpp's model catalogue](https://github.com/handy-computer/transcribe.cpp/tree/main/catalog).
 Real-world speech is harder; try a model with your own users' audio.
 
-The package knows many more models, including other languages: every model
+Whisper detects the language by itself, and its accuracy varies a lot between
+languages: widely spoken European languages do well, others less so. If
+`whisper-base` struggles with yours, try `whisper-small` (163 MB at
+`Q4_K_M`).
+
+The package knows 58 models in all, from the Whisper, Parakeet, Canary,
+Moonshine, SenseVoice, Qwen3-ASR and other families: every model
 transcribe.cpp publishes up to 1 GB. List them with `models.available`. A model
 being listed does not mean it is practical on a phone; the larger ones are
 slower and use more memory.

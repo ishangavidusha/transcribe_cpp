@@ -8,12 +8,14 @@
 **Offline speech-to-text for Flutter.** The user talks, your app gets text,
 and the audio never leaves the phone.
 
-Built on [transcribe.cpp](https://github.com/handy-computer/transcribe.cpp),
-which does the speech recognition. This package brings it to Flutter, with
-microphone capture, voice detection and live text around it.
+Run Whisper, Parakeet, Moonshine and more than 50 other open speech models on
+the phone, in about 100 languages. The speech recognition comes from
+[transcribe.cpp](https://github.com/handy-computer/transcribe.cpp); this package
+brings it to Flutter, with microphone capture, voice detection (Silero VAD)
+and live text around it.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ishangavidusha/transcribe_cpp/main/screenshots/demo.gif" width="400" alt="Words appearing on screen as a speech is transcribed live on the phone">
+  <img src="https://raw.githubusercontent.com/ishangavidusha/transcribe_cpp/main/screenshots/demo.gif" width="400" alt="A reading transcribed live on the phone in airplane mode: the sentence in progress appears in a Live box, finished sentences below it">
 </p>
 
 - **Private.** Everything runs on the device: no server, no account, no API
@@ -23,6 +25,8 @@ microphone capture, voice detection and live text around it.
 - **Live text.** Words appear while the user is still speaking, and settle in
   place without flickering.
 - **Fast.** About 40 times faster than real time on a mid-range phone.
+- **Your choice of model.** Whisper for about 100 languages, Parakeet for the
+  best English accuracy, Moonshine for the smallest download.
 - **Resilient.** Keeps going through calls, Siri, headphones being plugged in,
   and the app going to the background.
 - **Your audio, too.** Already record audio yourself? Feed it in at any sample
@@ -82,17 +86,19 @@ await session.transcribeStream(
 
 ## Models
 
-Models are downloaded at runtime, not bundled with your app. Two good places to
+Models are downloaded at runtime, not bundled with your app. Good places to
 start:
 
-| Model | Download | Word error rate* |
-|---|---|---|
-| `parakeet-tdt_ctc-110m-Q4_K_M` | 90 MB | 2.5% |
-| `moonshine-streaming-tiny-Q8_0` | 50 MB | 4.5% |
+| Model | Download | Languages | Word error rate* |
+|---|---|---|---|
+| `parakeet-tdt_ctc-110m-Q4_K_M` | 90 MB | English | 2.5% |
+| `moonshine-streaming-tiny-Q8_0` | 50 MB | English | 4.5% |
+| `whisper-base-Q8_0` | 81 MB | 99 | 5.1% |
 
-\* LibriSpeech test-clean, from the models' published benchmarks.
+\* LibriSpeech test-clean (English), from the models' published benchmarks.
 
-Many more are available, including other languages: every model
+The catalogue has 58 models in all, from Whisper, Parakeet, Canary,
+Moonshine, SenseVoice, Qwen3-ASR and other families: every model
 [transcribe.cpp](https://github.com/handy-computer/transcribe.cpp) publishes up
 to 1 GB.
 
