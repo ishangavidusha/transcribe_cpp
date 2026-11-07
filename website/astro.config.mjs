@@ -11,7 +11,7 @@ export default defineConfig({
 		starlight({
 			title: 'transcribe_cpp',
 			description:
-				'Offline, on-device speech-to-text for Flutter. Hands-free dictation on iOS and Android, with no network and no API keys.',
+				'Offline, on-device speech-to-text for Flutter. Run Whisper, Parakeet and 50+ open models on iOS and Android, with no network and no API keys.',
 			logo: { src: './src/assets/logo.svg' },
 			favicon: '/favicon.svg',
 			// The card shown when a page is shared on social sites and chats.
