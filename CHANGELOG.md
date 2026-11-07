@@ -4,6 +4,15 @@ All notable changes to this package are documented here. This project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html); while the version
 is below `1.0.0`, a `0.x.0` bump may break the API and a `0.x.y` bump may not.
 
+## 0.1.4 — 2026-11-07
+
+### Changed
+
+- Documentation only. The README, package description and docs site now
+  name the model families the catalogue already includes, among them
+  Whisper in 99 languages, and recommend `whisper-base-Q8_0` for speech that
+  is not English. The demo shows the current example app.
+
 ## 0.1.3 — 2026-10-21
 
 ### Fixed
