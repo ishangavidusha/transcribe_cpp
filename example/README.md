@@ -14,6 +14,16 @@ first run needs a network connection. After that it works offline.
 Run it in **release** on a real phone. Debug builds are much slower, and the
 simulator and emulator have no GPU for the engine.
 
+On an iPhone, the app needs your own signing team. Put it in
+`ios/Flutter/Local.xcconfig`, which git ignores:
+
+```
+DEVELOPMENT_TEAM = YOUR_TEAM_ID
+```
+
+Choosing a team in Xcode works too, but then the change shows up in
+`project.pbxproj`; keep it out of commits.
+
 ## What it shows
 
 - **Live transcription** from the microphone, with the sentence in progress in
